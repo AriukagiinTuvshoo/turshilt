@@ -33,6 +33,8 @@ import {
 import { TreeDrawer } from './tree-drawer';
 import { TreeExportModal } from '../../components/tree-export-modal';
 import { PedigreeWizardModal, RelativeRole } from '../../components/pedigree-wizard-modal';
+import { KinshipCalculatorModal } from '../../components/kinship-calculator-modal';
+import { GitCompare } from 'lucide-react';
 
 type RelationKind = 'parent' | 'child' | 'spouse';
 export type BloodlineMode = 'none' | 'all' | 'paternal' | 'maternal' | 'descendants';
@@ -137,6 +139,7 @@ function TreePageContent() {
 
   // Vector Print & Export Modal State
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [kinshipModalOpen, setKinshipModalOpen] = useState(false);
 
   // Pedigree Wizard Modal State
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -887,6 +890,19 @@ function TreePageContent() {
               }}
             >
               🖨️ Хананд хэвлэх (Вектор / PDF)
+            </button>
+            <button
+              type="button"
+              className="tree-button tree-button--secondary"
+              onClick={() => setKinshipModalOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+              }}
+            >
+              <GitCompare size={15} /> Хамаарал тооцоолох
             </button>
             <Link
               className="tree-button tree-button--secondary"
@@ -1674,6 +1690,16 @@ function TreePageContent() {
           setSelectedId(newPerson.id);
           await loadTree(familyId, newPerson.id, depth);
         }}
+      />
+
+      {/* Traditional Mongolian Kinship Calculator Modal */}
+      <KinshipCalculatorModal
+        isOpen={kinshipModalOpen}
+        onClose={() => setKinshipModalOpen(false)}
+        people={tree?.persons ?? []}
+        relationships={tree?.parent_child_relationships ?? []}
+        marriages={tree?.marriages ?? []}
+        initialPersonAId={selectedId || undefined}
       />
     </main>
   );

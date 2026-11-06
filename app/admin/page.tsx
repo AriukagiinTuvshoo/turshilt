@@ -1012,26 +1012,6 @@ function AdminContent() {
                 </option>
               ))}
             </select>
-
-            {selectedFamily && (
-              <button
-                type="button"
-                onClick={() => setCertificateOpen(true)}
-                className="homev2-button homev2-button--light"
-                style={{
-                  fontSize: '12px',
-                  padding: '6px 14px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  border: '1px solid #d9b85d',
-                  color: '#92400e',
-                  background: 'rgba(217, 184, 93, 0.1)',
-                }}
-              >
-                <Award size={14} /> 📜 Ургийн Батламж үүсгэх
-              </button>
-            )}
           </div>
 
           {/* Navigation Tabs */}
@@ -1042,7 +1022,7 @@ function AdminContent() {
               className={`homev2-button ${activeTab === 'people' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              👤 Хүмүүсийн бүртгэл ({people.length})
+              Хүмүүс ({people.length})
             </button>
             <button
               type="button"
@@ -1050,7 +1030,7 @@ function AdminContent() {
               className={`homev2-button ${activeTab === 'relationships' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              🔗 Ургийн холбоосууд ({marriages.length})
+              Холбоос ({marriages.length})
             </button>
             <button
               type="button"
@@ -1058,7 +1038,7 @@ function AdminContent() {
               className={`homev2-button ${activeTab === 'members' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              👑 Гишүүдийн эрх ({members.length})
+              Гишүүд ({members.length})
             </button>
             <button
               type="button"
@@ -1066,7 +1046,7 @@ function AdminContent() {
               className={`homev2-button ${activeTab === 'invitations' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              ✉️ Урилга ({invitations.length})
+              Урилга ({invitations.length})
             </button>
             <button
               type="button"
@@ -1074,7 +1054,7 @@ function AdminContent() {
               className={`homev2-button ${activeTab === 'heritage' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              📚 Өв сан ({memories.length + (stories?.items?.length ?? 0)})
+              Өв сан ({memories.length + (stories?.items?.length ?? 0)})
             </button>
             <button
               type="button"
@@ -1082,7 +1062,7 @@ function AdminContent() {
               className={`homev2-button ${activeTab === 'audit' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              📜 Үйлдлийн түүх ({auditLogs.length})
+              Түүх ({auditLogs.length})
             </button>
             <button
               type="button"
@@ -1090,7 +1070,7 @@ function AdminContent() {
               className={`homev2-button ${activeTab === 'trash' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              🗑️ Хогийн сав ({trashItems.length})
+              Хогийн сав ({trashItems.length})
             </button>
             <button
               type="button"
@@ -1098,7 +1078,7 @@ function AdminContent() {
               className={`homev2-button ${activeTab === 'settings' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              ⚙️ Тохиргоо
+              Тохиргоо
             </button>
           </div>
         </div>
@@ -1108,12 +1088,9 @@ function AdminContent() {
           <div className="families-main-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '20px' }}>
               <div>
-                <h3 style={{ font: '600 20px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-                  Ургийн модны хүмүүсийн бүрэн удирдлага ({people.length})
+                <h3 style={{ font: '600 18px Georgia, serif', margin: 0, color: 'var(--ink-primary, #17372b)' }}>
+                  Хүмүүсийн бүртгэл ({people.length})
                 </h3>
-                <p style={{ fontSize: '13px', color: 'var(--ink-secondary, #485c53)', margin: 0 }}>
-                  Эндээс шинээр өвөг дээдэс, үр хойч, гэр бүлийн хүмүүсээ шууд нэмж, засаж, устгах боломжтой.
-                </p>
               </div>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ position: 'relative', minWidth: '220px' }}>
@@ -1551,12 +1528,9 @@ function AdminContent() {
           <div style={{ display: 'grid', gap: '20px' }}>
             {/* PARENT-CHILD BUILDER */}
             <div className="families-main-card">
-              <h3 style={{ font: '600 18px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-                🌳 Эцэг эх - Хүүхдийн холбоос үүсгэх
+              <h3 style={{ font: '600 17px Georgia, serif', margin: '0 0 16px', color: 'var(--ink-primary, #17372b)' }}>
+                Эцэг эх — Хүүхдийн холбоос үүсгэх
               </h3>
-              <p style={{ fontSize: '12.5px', color: 'var(--ink-secondary, #485c53)', margin: '0 0 16px' }}>
-                Сонгосон эцэг/эхийг тухайн хүүхдийн шууд дээд үеийн мөчир болгон зангидна.
-              </p>
 
               <form onSubmit={handleAddParentChild} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <label style={{ fontSize: '12px', fontWeight: 600, minWidth: '220px' }}>
@@ -1610,12 +1584,9 @@ function AdminContent() {
 
             {/* MARRIAGES MANAGER */}
             <div className="families-main-card">
-              <h3 style={{ font: '600 18px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-                💍 Гэрлэлтийн холбоо үүсгэх ба удирдах ({marriages.length})
+              <h3 style={{ font: '600 17px Georgia, serif', margin: '0 0 16px', color: 'var(--ink-primary, #17372b)' }}>
+                Гэрлэлтийн холбоо ({marriages.length})
               </h3>
-              <p style={{ fontSize: '12.5px', color: 'var(--ink-secondary, #485c53)', margin: '0 0 16px' }}>
-                Хоёр бие хүний дунд гэр бүл, ханийн харилцааг бүртгэж модон дээр зэрэгцүүлэн харуулна.
-              </p>
 
               <form onSubmit={handleAddMarriage} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '24px' }}>
                 <label style={{ fontSize: '12px', fontWeight: 600, minWidth: '180px' }}>
@@ -1727,51 +1698,10 @@ function AdminContent() {
         {/* TAB 3: MEMBERS & ROLES */}
         {activeTab === 'members' && (
           <div className="families-main-card">
-            <h3 style={{ font: '600 20px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-              Гэр бүлийн гишүүд & Хандалтын 3 түвшний засаглал ({members.length})
-            </h3>
-            <p style={{ fontSize: '13px', color: 'var(--ink-secondary, #485c53)', margin: '0 0 16px' }}>
-              Гэр бүлийн хүрээнд хэн ямар эрхтэй оролцох, модон дахь аль бодит хүнтэй хаяг нь холбогдсоныг удирдах хяналтын төв.
-            </p>
-
-            {/* 3-Tier Multi-Level Governance Matrix */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '12px',
-                marginBottom: '20px',
-              }}
-            >
-              <div style={{ padding: '14px 16px', borderRadius: '12px', background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.25)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <Sparkles size={16} style={{ color: '#b45309' }} />
-                  <strong style={{ fontSize: '13px', color: '#92400e' }}>1. Эзэмшигч (Ерөнхий Админ)</strong>
-                </div>
-                <p style={{ fontSize: '11.5px', color: 'var(--ink-secondary, #485c53)', margin: 0, lineHeight: 1.5 }}>
-                  Гэр бүлийг өөрчлөх, нөөцлөх, удирдах, бүх гишүүдийн эрхийг шилжүүлэх болон Үйлдлийн түүхийг (Audit Log) бүрэн хянана.
-                </p>
-              </div>
-
-              <div style={{ padding: '14px 16px', borderRadius: '12px', background: 'rgba(5, 150, 105, 0.08)', border: '1px solid rgba(5, 150, 105, 0.25)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <ShieldCheck size={16} style={{ color: '#047857' }} />
-                  <strong style={{ fontSize: '13px', color: '#065f46' }}>2. Засварлагч (Салбарын Админ)</strong>
-                </div>
-                <p style={{ fontSize: '11.5px', color: 'var(--ink-secondary, #485c53)', margin: 0, lineHeight: 1.5 }}>
-                  Ургийн модонд хүн нэмэх, засах, ураг зангидах, дурсамж, түүх, архив оруулах бүрэн эрхтэй бөгөөд аюулгүй байдлыг хангана.
-                </p>
-              </div>
-
-              <div style={{ padding: '14px 16px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <UserRound size={16} style={{ color: '#1d4ed8' }} />
-                  <strong style={{ fontSize: '13px', color: '#1e40af' }}>3. Гишүүн (Уншигч & Үзэгч)</strong>
-                </div>
-                <p style={{ fontSize: '11.5px', color: 'var(--ink-secondary, #485c53)', margin: 0, lineHeight: 1.5 }}>
-                  Өөрийн ургийн модоо тав тухтай үзэх, өв соёл, дурсамж, түүхийг шимтэн унших, өөрийн хүсэлт, өгүүллэгээ илгээх эрхтэй.
-                </p>
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ font: '600 18px Georgia, serif', margin: 0, color: 'var(--ink-primary, #17372b)' }}>
+                Гишүүд ({members.length})
+              </h3>
             </div>
 
             <div className="admin-members-list">
@@ -1916,12 +1846,9 @@ function AdminContent() {
         {/* TAB 4: INVITATIONS */}
         {activeTab === 'invitations' && (
           <div className="families-main-card">
-            <h3 style={{ font: '600 20px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-              ✉️ Урилгын удирдлага & 1-Click Share Холбоос
+            <h3 style={{ font: '600 18px Georgia, serif', margin: '0 0 16px', color: 'var(--ink-primary, #17372b)' }}>
+              Урилга илгээх
             </h3>
-            <p style={{ fontSize: '13px', color: 'var(--ink-secondary, #485c53)', margin: '0 0 16px' }}>
-              Гэр бүлийн бусад гишүүдээ имэйлээр урих эсвэл бэлэн нууц холбоосоор Telegram, Messenger-ээр шууд урьж оруулна.
-            </p>
 
             {/* Created Invite Success Card with 1-Click Copy */}
             {createdInviteUrl && (
@@ -2130,10 +2057,41 @@ function AdminContent() {
         {/* TAB 5: HERITAGE & CONTENT MODERATION */}
         {activeTab === 'heritage' && (
           <div style={{ display: 'grid', gap: '20px' }}>
+            {/* PEDIGREE CERTIFICATE */}
+            <div
+              className="families-main-card"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+                background: 'linear-gradient(135deg, rgba(23, 55, 43, 0.04), rgba(180, 83, 9, 0.06))',
+                border: '1px solid rgba(180, 83, 9, 0.25)',
+              }}
+            >
+              <div>
+                <h3 style={{ font: '600 17px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
+                  Ургийн Батламж үүсгэх
+                </h3>
+                <p style={{ fontSize: '12.5px', color: 'var(--ink-secondary, #485c53)', margin: 0 }}>
+                  Уламжлалт хэв маяг, тамга бүхий дурсгалын батламж үүсгэж хэвлэх эсвэл PDF татаж авна.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCertificateOpen(true)}
+                className="homev2-button homev2-button--primary"
+                style={{ fontSize: '12.5px', padding: '8px 18px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Award size={15} /> Батламж үүсгэх
+              </button>
+            </div>
+
             {/* STORIES */}
             <div className="families-main-card">
-              <h3 style={{ font: '600 18px Georgia, serif', margin: '0 0 10px', color: 'var(--ink-primary, #17372b)' }}>
-                📖 Манай түүхүүд ({stories?.items?.length ?? 0})
+              <h3 style={{ font: '600 17px Georgia, serif', margin: '0 0 10px', color: 'var(--ink-primary, #17372b)' }}>
+                Манай түүхүүд ({stories?.items?.length ?? 0})
               </h3>
               {stories?.items?.length ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -2288,56 +2246,22 @@ function AdminContent() {
               </div>
             )}
 
-            {/* COLLAPSIBLE ADVANCED DATA TOOLS (EXPORT / IMPORT) */}
-            <details
-              style={{
-                marginTop: '16px',
-                padding: '16px 20px',
-                borderRadius: '12px',
-                background: 'var(--parchment-canvas, #f6f2e8)',
-                border: '1px solid var(--parchment-border, #e2d9c8)',
-                maxWidth: '640px',
-              }}
-            >
-              <summary
-                style={{
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--ink-secondary, #485c53)',
-                  userSelect: 'none',
-                }}
-              >
-                📁 Ахисан түвшний хэрэгсэл: Өгөгдөл нөөцлөх ба сэргээх
-              </summary>
-
-              <div style={{ marginTop: '18px', display: 'grid', gap: '20px' }}>
-                <div>
-                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-                    Өгөгдөл нөөцлөн татах (JSON Export)
-                  </h4>
-                  <p style={{ fontSize: '12px', color: 'var(--ink-secondary, #485c53)', margin: '0 0 10px' }}>
-                    Танай гэр бүлийн бүх хүмүүс, үе дамжсан холбоосууд, гэрлэлтүүд, гишүүдийн мэдээллийг стандартын JSON файл хэлбэрээр татаж авна.
-                  </p>
+            {/* DISCREET SYSTEM DATA BACKUP */}
+            <div style={{ marginTop: '36px', paddingTop: '20px', borderTop: '1px solid var(--parchment-border, #e2d9c8)' }}>
+              <details style={{ cursor: 'pointer' }}>
+                <summary style={{ fontSize: '12px', color: 'var(--ink-muted, #74857b)', userSelect: 'none' }}>
+                  Нөөц өгөгдөл татах, сэргээх (JSON)
+                </summary>
+                <div style={{ marginTop: '14px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button
                     type="button"
                     onClick={handleExportBackup}
                     className="homev2-button homev2-button--light"
-                    style={{ fontSize: '12px', padding: '8px 16px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    style={{ fontSize: '11.5px', padding: '6px 14px' }}
                   >
-                    <Download size={14} /> Нөөц өгөгдөл татах (JSON)
+                    <Download size={13} style={{ display: 'inline', marginRight: '4px' }} /> Нөөц татах
                   </button>
-                </div>
 
-                <hr style={{ border: 'none', borderTop: '1px solid var(--parchment-border, #e2d9c8)', margin: 0 }} />
-
-                <div>
-                  <h4 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-                    Нөөц өгөгдөл оруулах (JSON Import)
-                  </h4>
-                  <p style={{ fontSize: '12px', color: 'var(--ink-secondary, #485c53)', margin: '0 0 10px' }}>
-                    Өмнө нь татаж авсан JSON нөөц файлаас хүмүүс болон холбоосын бүтцийг гэр бүлийн модонд оруулан нэгтгэнэ.
-                  </p>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -2351,20 +2275,16 @@ function AdminContent() {
                     htmlFor="admin-backup-file-input"
                     className="homev2-button homev2-button--light"
                     style={{
-                      fontSize: '12px',
-                      padding: '8px 16px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
+                      fontSize: '11.5px',
+                      padding: '6px 14px',
                       cursor: importingBackup ? 'not-allowed' : 'pointer',
-                      width: 'max-content',
                     }}
                   >
-                    <Sparkles size={14} /> {importingBackup ? 'Өгөгдөл оруулж байна…' : 'JSON файл сонгож оруулах'}
+                    {importingBackup ? 'Уншиж байна…' : 'Нөөц файл оруулах'}
                   </label>
                 </div>
-              </div>
-            </details>
+              </details>
+            </div>
           </div>
         )}
 
@@ -2373,12 +2293,9 @@ function AdminContent() {
           <div className="families-main-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '20px' }}>
               <div>
-                <h3 style={{ font: '600 20px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-                  📜 Үйлдлийн түүх ба Тэмдэглэл ({auditLogs.length})
+                <h3 style={{ font: '600 18px Georgia, serif', margin: 0, color: 'var(--ink-primary, #17372b)' }}>
+                  Үйлдлийн бүртгэл ({auditLogs.length})
                 </h3>
-                <p style={{ fontSize: '13px', color: 'var(--ink-secondary, #485c53)', margin: 0 }}>
-                  Гэр бүлийн хүрээнд хийгдсэн бүх бүртгэл, ураг холболт, гишүүдийн эрхийн өөрчлөлт, устгал зэрэг чухал үйлдлүүдийн аюулгүй бүртгэл.
-                </p>
               </div>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <div style={{ position: 'relative', minWidth: '220px' }}>
@@ -2407,28 +2324,6 @@ function AdminContent() {
                 </button>
               </div>
             </div>
-
-            {!isOwner && (
-              <div
-                style={{
-                  padding: '16px 20px',
-                  borderRadius: '12px',
-                  background: 'rgba(217, 184, 93, 0.12)',
-                  border: '1px solid rgba(217, 184, 93, 0.35)',
-                  marginBottom: '20px',
-                  fontSize: '13px',
-                  color: 'var(--ink-secondary, #485c53)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                }}
-              >
-                <Shield size={20} style={{ color: '#b45309', flexShrink: 0 }} />
-                <span>
-                  Үйлдлийн түүх (Audit Log) нь гэр бүлийн эзэмшигч (Owner)-д зориулагдсан өндөр түвшний хяналтын механизм юм. Та одоогоор <strong>{selectedFamily ? roleLabel(selectedFamily.role) : 'Тодорхойгүй'}</strong> эрхтэй байна.
-                </span>
-              </div>
-            )}
 
             {filteredAuditLogs.length > 0 ? (
               <div style={{ display: 'grid', gap: '8px' }}>
@@ -2521,12 +2416,9 @@ function AdminContent() {
           <div className="families-main-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '20px' }}>
               <div>
-                <h3 style={{ font: '600 20px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-                  🗑️ Хогийн сав ба буцаан сэргээлт ({trashItems.length})
+                <h3 style={{ font: '600 18px Georgia, serif', margin: 0, color: 'var(--ink-primary, #17372b)' }}>
+                  Хогийн сав ({trashItems.length})
                 </h3>
-                <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-secondary, #485c53)' }}>
-                  Модноос салгасан хүмүүс болон холбоосын бичлэг энд хадгалагдана. Хүссэн үедээ 1 товшилтоор модонд нь буцаан залгах боломжтой.
-                </p>
               </div>
 
               {trashItems.length > 0 && isAdmin && (

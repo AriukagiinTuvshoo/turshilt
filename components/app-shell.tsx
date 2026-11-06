@@ -9,6 +9,7 @@ import {
   Home,
   LogOut,
   Menu,
+  MessageSquare,
   Settings,
   ShieldCheck,
   TreeDeciduous,
@@ -24,7 +25,7 @@ import { ThemePicker } from './theme-picker';
 import { FamilyChatDrawer } from './family-chat-drawer';
 
 type NavItem = {
-  key: 'dashboard' | 'tree' | 'people' | 'stories' | 'memories' | 'archives' | 'admin' | 'settings';
+  key: 'dashboard' | 'tree' | 'people' | 'stories' | 'memories' | 'archives' | 'chat' | 'admin' | 'settings';
   label: string;
   description: string;
   icon: LucideIcon;
@@ -39,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'stories', label: 'Манай түүх', description: 'Түүх, үйл явдлууд', icon: BookOpen, path: '/stories', needsFamily: true },
   { key: 'memories', label: 'Дурсамж', description: 'Хадгалсан дурсамж', icon: Globe2, path: '/memories', needsFamily: true },
   { key: 'archives', label: 'Архив', description: 'Гэр бүлийн баримт', icon: Archive, path: '/archives', needsFamily: true },
+  { key: 'chat', label: 'Зурвас', description: 'Гэр бүлийн яриа', icon: MessageSquare, path: '/chat', needsFamily: true },
   { key: 'admin', label: 'Админ удирдлага', description: 'Гишүүд, эрх ба хамгаалалт', icon: ShieldCheck, path: '/admin', needsFamily: true },
   { key: 'settings', label: 'Тохиргоо', description: 'Account ба аюулгүй байдал', icon: Settings, path: '/settings', needsFamily: false },
 ];
@@ -55,6 +57,8 @@ function isShellRoute(pathname: string) {
     pathname.startsWith('/memories/') ||
     pathname === '/archives' ||
     pathname.startsWith('/archives/') ||
+    pathname === '/chat' ||
+    pathname.startsWith('/chat/') ||
     pathname === '/settings' ||
     pathname.startsWith('/settings/') ||
     pathname === '/account/security' ||
@@ -80,6 +84,7 @@ function activeKey(pathname: string): NavItem['key'] | null {
   if (pathname === '/stories' || pathname.startsWith('/stories/')) return 'stories';
   if (pathname === '/memories' || pathname.startsWith('/memories/')) return 'memories';
   if (pathname === '/archives' || pathname.startsWith('/archives/')) return 'archives';
+  if (pathname === '/chat' || pathname.startsWith('/chat/')) return 'chat';
   if (pathname === '/admin' || pathname.startsWith('/admin/') || pathname === '/families' || pathname.startsWith('/families/')) return 'admin';
   if (
     pathname === '/settings' ||
@@ -514,8 +519,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {/* Real-time Family Messenger */}
-        <FamilyChatDrawer familyId={familyId} currentUserId={user?.id} />
+        {/* Real-time Family Messenger (floating on other routes, not duplicated on /chat) */}
+        {pathname !== '/chat' && <FamilyChatDrawer familyId={familyId} currentUserId={user?.id} />}
       </div>
     </div>
   );
