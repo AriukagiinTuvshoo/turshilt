@@ -733,26 +733,25 @@ function AdminContent() {
   };
 
   // 13. FULL JSON BACKUP DOWNLOAD
-  const handleExportBackup = () => {
-    if (!selectedFamily) return;
-    const backupData = {
-      family: selectedFamily,
-      stats,
-      exported_at: new Date().toISOString(),
-      people_count: people.length,
-      people,
-      members,
-      marriages,
-      invitations,
-    };
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `guulin-backup-${selectedFamily.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setNotice('Гэр бүлийн нөөц өгөгдлийг (JSON) амжилттай татаж авлаа.');
+  const handleExportBackup = async () => {
+    if (!selectedFamily || !selectedFamilyId) return;
+    try {
+      setActionBusy(true);
+      setError('');
+      const backupData = await api<any>(`/families/${selectedFamilyId}/export`);
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `guulin-backup-${selectedFamily.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setNotice('Гэр бүлийн нөөц өгөгдлийг (бүрэн мод, харилцаатай) амжилттай татаж авлаа.');
+    } catch (cause) {
+      setError(friendlyError(cause, 'Нөөц татахад алдаа гарлаа.'));
+    } finally {
+      setActionBusy(false);
+    }
   };
 
   // 14. RESTORE TRASH PERSON
@@ -843,8 +842,11 @@ function AdminContent() {
         }),
       });
 
+      const warningSuffix = res.warnings && res.warnings.length > 0
+        ? ` (Анхааруулга: ${res.warnings.join('; ')})`
+        : '';
       setNotice(
-        `Өгөгдөл амжилттай импортлогдлоо: ${res.imported_people} хүн, ${res.imported_relationships} эцэг эхийн холбоос, ${res.imported_marriages} гэрлэлт оруулав.`
+        `Өгөгдөл амжилттай импортлогдлоо: ${res.imported_people} хүн, ${res.imported_relationships} эцэг эхийн холбоос, ${res.imported_marriages} гэрлэлт оруулав.${warningSuffix}`
       );
       await loadDetails(selectedFamilyId);
     } catch (cause) {
@@ -1452,7 +1454,7 @@ function AdminContent() {
                             <strong style={{ fontSize: '14.5px', color: 'var(--ink-primary, #17372b)' }}>
                               {person.last_name} {person.first_name}
                             </strong>
-                            {person.birth_date && person.is_alive && (new Date().getFullYear() - parseInt(person.birth_date.slice(0, 4), 10) < 18) && (
+                            {(person.is_minor || (person.birth_date && person.is_alive && (new Date().getFullYear() - parseInt(person.birth_date.slice(0, 4), 10) < 18))) && (
                               <span
                                 style={{
                                   display: 'inline-flex',
@@ -2638,6 +2640,7 @@ function AdminContent() {
           family={selectedFamily}
           stats={stats}
           people={people}
+          relationships={treeData?.parent_child_relationships || []}
         />
 
         {/* MEMBER TO PERSON LINKING MODAL */}

@@ -10,6 +10,7 @@ export interface PedigreeCertificateModalProps {
   family: Family | null;
   stats?: FamilyStats | null;
   people?: Person[];
+  relationships?: Array<{ parent_id: string; child_id: string }>;
   founderName?: string;
 }
 
@@ -19,6 +20,7 @@ export function PedigreeCertificateModal({
   family,
   stats,
   people = [],
+  relationships = [],
   founderName,
 }: PedigreeCertificateModalProps) {
   const [recipientTitle, setRecipientTitle] = useState('Бүх үе залгамжлагчдад');
@@ -38,12 +40,36 @@ export function PedigreeCertificateModal({
 
   const roots = useMemo(() => {
     if (founderName) return [founderName];
-    // Find people with no parent if people provided
-    return people.slice(0, 3).map((p) => `${p.last_name || ''} ${p.first_name}`.trim()).filter(Boolean);
-  }, [founderName, people]);
+    if (people.length === 0) return [];
+
+    // Identify true tree roots: parents with no incoming parent edges
+    if (relationships && relationships.length > 0) {
+      const childIds = new Set(relationships.map((r) => r.child_id));
+      const parentIds = new Set(relationships.map((r) => r.parent_id));
+
+      const rootPeople = people.filter((p) => parentIds.has(p.id) && !childIds.has(p.id));
+      if (rootPeople.length > 0) {
+        return rootPeople
+          .slice(0, 4)
+          .map((p) => `${p.last_name ? p.last_name + ' ' : ''}${p.first_name}`.trim())
+          .filter(Boolean);
+      }
+    }
+
+    // Fallback: earliest birth date
+    const sortedByAge = [...people].sort((a, b) => {
+      const aDate = a.birth_date ? new Date(a.birth_date).getTime() : Infinity;
+      const bDate = b.birth_date ? new Date(b.birth_date).getTime() : Infinity;
+      return aDate - bDate;
+    });
+    return sortedByAge
+      .slice(0, 3)
+      .map((p) => `${p.last_name ? p.last_name + ' ' : ''}${p.first_name}`.trim())
+      .filter(Boolean);
+  }, [founderName, people, relationships]);
 
   const totalCount = stats?.total_persons ?? people.length;
-  const generationDepth = stats?.generation_depth ?? 5;
+  const generationDepth = stats?.generation_depth && stats.generation_depth > 0 ? `${stats.generation_depth} үе` : 'Тодорхойгүй';
 
   if (!isOpen || !family) return null;
 
@@ -101,7 +127,7 @@ export function PedigreeCertificateModal({
                 Монгол Ургийн Батламж үүсгэх
               </h3>
               <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
-                Төрийн болон уламжлалт хэв маяг бүхий албан ёсны гэрчилгээ
+                Монгол уламжлалт хэв маяг бүхий удмын сангийн дотоод дурсгалын батламж
               </p>
             </div>
           </div>
@@ -258,14 +284,14 @@ export function PedigreeCertificateModal({
               <div
                 style={{
                   fontSize: '11px',
-                  letterSpacing: '5px',
+                  letterSpacing: '4px',
                   fontWeight: 700,
                   textTransform: 'uppercase',
                   color: '#65776d',
                   marginBottom: '6px',
                 }}
               >
-                МОНГОЛ УЛС • УДМЫН САНГИЙН БҮРТГЭЛ
+                ГУУЛИНГИЙНХАН • УРГИЙН БИЧГИЙН ДУРСГАЛЫН БАТЛАМЖ
               </div>
               <h1
                 style={{
@@ -349,7 +375,7 @@ export function PedigreeCertificateModal({
                     Үе дамжсан гүн
                   </div>
                   <div style={{ fontSize: '24px', fontWeight: 700, color: '#17372b', marginTop: '4px' }}>
-                    {generationDepth} үе
+                    {generationDepth}
                   </div>
                 </div>
 

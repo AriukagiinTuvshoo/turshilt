@@ -114,3 +114,99 @@ def test_family_data_import(client, database):
     names = [f"{p['last_name']} {p['first_name']}" for p in people]
     assert "Хөх Өвөө" in names
     assert "Хөх Хүү" in names
+
+
+def test_family_export_and_import_roundtrip(client, database):
+    assert register_verified(client, "roundtrip-owner@example.com").status_code == 201
+
+    # 1. Create Family A
+    family_a = client.post("/api/v1/families", json={"name": "Эх гэр бүл"}).json()
+    fam_a_id = family_a["id"]
+
+    # 2. Add father, mother, child
+    p_father = client.post(
+        f"/api/v1/families/{fam_a_id}/persons",
+        json={"first_name": "Болд", "last_name": "Боржигон", "gender": "male", "birth_date": "1975-01-01"},
+    ).json()
+    p_mother = client.post(
+        f"/api/v1/families/{fam_a_id}/persons",
+        json={"first_name": "Цэцэг", "last_name": "Хөх", "gender": "female", "birth_date": "1978-05-12"},
+    ).json()
+    p_child = client.post(
+        f"/api/v1/families/{fam_a_id}/persons",
+        json={"first_name": "Мөнх", "last_name": "Болд", "gender": "male", "birth_date": "2005-09-20"},
+    ).json()
+
+    # 3. Add marriage & parent-child relationships
+    m_resp = client.post(
+        f"/api/v1/families/{fam_a_id}/marriages",
+        json={"person_1_id": p_father["id"], "person_2_id": p_mother["id"], "status": "married"},
+    )
+    assert m_resp.status_code == 201
+
+    r1 = client.post(
+        f"/api/v1/families/{fam_a_id}/relationships/parent-child",
+        json={"parent_id": p_father["id"], "child_id": p_child["id"], "relationship_type": "biological"},
+    )
+    assert r1.status_code == 201
+
+    r2 = client.post(
+        f"/api/v1/families/{fam_a_id}/relationships/parent-child",
+        json={"parent_id": p_mother["id"], "child_id": p_child["id"], "relationship_type": "biological"},
+    )
+    assert r2.status_code == 201
+
+    # 4. Export Family A
+    export_resp = client.get(f"/api/v1/families/{fam_a_id}/export")
+    assert export_resp.status_code == 200
+    export_data = export_resp.json()
+    assert export_data["schema_version"] == 1
+    assert len(export_data["people"]) == 3
+    assert len(export_data["parent_child_relationships"]) == 2
+    assert len(export_data["marriages"]) == 1
+
+    # 5. Create Family B and import into it
+    family_b = client.post("/api/v1/families", json={"name": "Хүлээн авагч гэр бүл"}).json()
+    fam_b_id = family_b["id"]
+
+    import_resp = client.post(f"/api/v1/families/{fam_b_id}/import", json=export_data)
+    assert import_resp.status_code == 200
+    res_b = import_resp.json()
+    assert res_b["success"] is True
+    assert res_b["imported_people"] == 3
+    assert res_b["imported_relationships"] == 2
+    assert res_b["imported_marriages"] == 1
+
+    # 6. Verify tree in Family B
+    tree_b = client.get(f"/api/v1/families/{fam_b_id}/tree").json()
+    assert len(tree_b["persons"]) == 3
+    assert len(tree_b["parent_child_relationships"]) == 2
+    assert len(tree_b["marriages"]) == 1
+
+
+def test_person_minor_flag(client, database):
+    assert register_verified(client, "minor-check-owner@example.com").status_code == 201
+    family = client.post("/api/v1/families", json={"name": "Насанд хүрээгүй шалгалт"}).json()
+    fid = family["id"]
+
+    # Adult
+    p_adult = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={"first_name": "Эрдэнэ", "last_name": "Бат", "gender": "male", "birth_date": "1980-01-01", "is_alive": True},
+    ).json()
+    assert p_adult["is_minor"] is False
+
+    # Minor (born 2 years ago)
+    p_minor = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={"first_name": "Бяцхан", "last_name": "Бат", "gender": "female", "birth_date": "2023-01-01", "is_alive": True},
+    ).json()
+    assert p_minor["is_minor"] is True
+
+    # Person with unknown birth date -> is_minor is False
+    p_unknown = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={"first_name": "Тодорхойгүй", "last_name": "Бат", "gender": "male", "birth_date": None, "is_alive": True},
+    ).json()
+    assert p_unknown["is_minor"] is False
+

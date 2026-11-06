@@ -77,6 +77,7 @@ export type Person = {
   created_by?: string | null;
   can_edit?: boolean;
   can_delete?: boolean;
+  is_minor?: boolean;
 };
 export type TreeData = {
   persons: TreePerson[];
@@ -248,6 +249,7 @@ export type StoryListItem = {
   updated_at: string;
   can_edit?: boolean;
   can_delete?: boolean;
+  is_minor?: boolean;
 };
 
 export type StoryListPage = {
@@ -326,6 +328,7 @@ export type FamilyImportResult = {
   imported_people: number;
   imported_relationships: number;
   imported_marriages: number;
+  warnings?: string[];
 };
 
 
