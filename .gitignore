@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.next/
+next-env.d.ts
+.env
+.venv/
+backend/.venv/
+backend/*.db
+backend/*.sqlite*
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/*.egg-info/
+.DS_Store
+
+# Local databases, archives and caches (never commit real family data)
+*.db
+*.db-journal
+*.sqlite*
+*.zip
+.pytest_cache/
+.pytest_temp/
+.ruff_cache/
+tsconfig.tsbuildinfo
+backend/media/
+backend/storage/
