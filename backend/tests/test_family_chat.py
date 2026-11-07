@@ -1,5 +1,7 @@
 from uuid import UUID
+
 from conftest import register_verified
+
 from app.models import FamilyMember
 
 

@@ -1,0 +1,140 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { calculateMongolianKinship, type KinshipPerson, type KinshipEdge, type KinshipMarriage } from '../lib/kinship.ts';
+import { exportToGedcom, parseGedcom } from '../lib/gedcom.ts';
+import { findDuplicatePeople, getUpcomingFamilyReminders } from '../lib/duplicates.ts';
+
+describe('Mongolian Traditional Kinship Calculator (lib/kinship.ts)', () => {
+  const people: KinshipPerson[] = [
+    { id: 'gf', first_name: 'Дорж', last_name: 'Боржигон', gender: 'male' },
+    { id: 'gm', first_name: 'Дулам', last_name: 'Хөх', gender: 'female' },
+    { id: 'father', first_name: 'Бат', last_name: 'Дорж', gender: 'male' },
+    { id: 'mother', first_name: 'Цэцэг', last_name: 'Болд', gender: 'female' },
+    { id: 'paternal_uncle', first_name: 'Төмөр', last_name: 'Дорж', gender: 'male' },
+    { id: 'ego', first_name: 'Тэмүүлэн', last_name: 'Бат', gender: 'male' },
+    { id: 'sister', first_name: 'Номин', last_name: 'Бат', gender: 'female' },
+    { id: 'wife', first_name: 'Саруул', last_name: 'Эрдэнэ', gender: 'female' },
+    { id: 'son', first_name: 'Анар', last_name: 'Тэмүүлэн', gender: 'male' },
+    { id: 'daughter', first_name: 'Мишээл', last_name: 'Тэмүүлэн', gender: 'female' },
+    { id: 'grandson_pat', first_name: 'Билгүүн', last_name: 'Анар', gender: 'male' },
+    { id: 'grandchild_mat', first_name: 'Энхжин', last_name: 'Мишээл', gender: 'female' },
+    { id: 'cousin_pat', first_name: 'Ганзориг', last_name: 'Төмөр', gender: 'male' },
+  ];
+
+  const edges: KinshipEdge[] = [
+    { parent_id: 'gf', child_id: 'father' },
+    { parent_id: 'gm', child_id: 'father' },
+    { parent_id: 'gf', child_id: 'paternal_uncle' },
+    { parent_id: 'gm', child_id: 'paternal_uncle' },
+    { parent_id: 'father', child_id: 'ego' },
+    { parent_id: 'mother', child_id: 'ego' },
+    { parent_id: 'father', child_id: 'sister' },
+    { parent_id: 'mother', child_id: 'sister' },
+    { parent_id: 'ego', child_id: 'son' },
+    { parent_id: 'wife', child_id: 'son' },
+    { parent_id: 'ego', child_id: 'daughter' },
+    { parent_id: 'wife', child_id: 'daughter' },
+    { parent_id: 'son', child_id: 'grandson_pat' },
+    { parent_id: 'daughter', child_id: 'grandchild_mat' },
+    { parent_id: 'paternal_uncle', child_id: 'cousin_pat' },
+  ];
+
+  const marriages: KinshipMarriage[] = [
+    { person_1_id: 'gf', person_2_id: 'gm' },
+    { person_1_id: 'father', person_2_id: 'mother' },
+    { person_1_id: 'ego', person_2_id: 'wife' },
+  ];
+
+  it('correctly identifies direct ancestors (Аав, Ээж, Өвөө)', () => {
+    const fatherRel = calculateMongolianKinship('ego', 'father', people, edges, marriages);
+    assert.ok(fatherRel);
+    assert.match(fatherRel.relationshipName, /Аав/i);
+
+    const gfRel = calculateMongolianKinship('ego', 'gf', people, edges, marriages);
+    assert.ok(gfRel);
+    assert.match(gfRel.relationshipName, /Өвөө/i);
+  });
+
+  it('distinguishes Ач (son’s child) vs Зээ (daughter’s child)', () => {
+    const ach = calculateMongolianKinship('ego', 'grandson_pat', people, edges, marriages);
+    assert.ok(ach);
+    assert.match(ach.relationshipName, /Ач/);
+
+    const zee = calculateMongolianKinship('ego', 'grandchild_mat', people, edges, marriages);
+    assert.ok(zee);
+    assert.match(zee.relationshipName, /Зээ/);
+  });
+
+  it('identifies Авга (paternal uncle) and Үеэл (first cousin)', () => {
+    const avga = calculateMongolianKinship('ego', 'paternal_uncle', people, edges, marriages);
+    assert.ok(avga);
+    assert.match(avga.relationshipName, /Авга/);
+
+    const uyeel = calculateMongolianKinship('ego', 'cousin_pat', people, edges, marriages);
+    assert.ok(uyeel);
+    assert.match(uyeel.relationshipName, /үеэл/i);
+  });
+
+  it('identifies spouse (Хань / Гэргий)', () => {
+    const spouse = calculateMongolianKinship('ego', 'wife', people, edges, marriages);
+    assert.ok(spouse);
+    assert.equal(spouse.lineageType, 'spouse');
+  });
+});
+
+describe('GEDCOM 5.5.1 Export & Parse Round-Trip (lib/gedcom.ts)', () => {
+  it('exports valid GEDCOM 5.5.1 and parses it back without losing people or links', () => {
+    const people = [
+      { id: 'p1', first_name: 'Баяр', last_name: 'Боржигон', gender: 'male', birth_date: '1965-03-14', is_alive: true },
+      { id: 'p2', first_name: 'Оюун', last_name: 'Тайж', gender: 'female', birth_date: '1968-07-22', is_alive: true },
+      { id: 'p3', first_name: 'Зориг', last_name: 'Баяр', gender: 'male', birth_date: '1995-11-05', is_alive: true },
+    ];
+    const rels = [
+      { parent_id: 'p1', child_id: 'p3' },
+      { parent_id: 'p2', child_id: 'p3' },
+    ];
+    const marriages = [{ person_1_id: 'p1', person_2_id: 'p2', start_date: '1992-06-01', status: 'married' }];
+
+    const gedText = exportToGedcom('Гуулингийнхан', people, rels, marriages);
+    assert.ok(gedText.includes('0 HEAD'));
+    assert.ok(gedText.includes('2 VERS 5.5.1'));
+    assert.ok(gedText.includes('1 NAME Баяр /Боржигон/'));
+
+    const parsed = parseGedcom(gedText);
+    assert.equal(parsed.people.length, 3);
+    assert.equal(parsed.parent_child_relationships.length, 2);
+    assert.equal(parsed.marriages.length, 1);
+    assert.equal(parsed.people[0].first_name, 'Баяр');
+    assert.equal(parsed.people[0].last_name, 'Боржигон');
+  });
+});
+
+describe('Duplicate Detection & Reminders (lib/duplicates.ts)', () => {
+  it('flags probable duplicate people with identical or near-identical names and birth years', () => {
+    const list = [
+      { id: '1', first_name: 'Батбаяр', last_name: 'Боржигон', gender: 'male', birth_date: '1980-04-10' },
+      { id: '2', first_name: 'Батбаяр', last_name: 'Боржигон', gender: 'male', birth_date: '1980-01-01' },
+      { id: '3', first_name: 'Сүхбаатар', last_name: 'Хөх', gender: 'male', birth_date: '1950-05-05' },
+    ];
+    const dups = findDuplicatePeople(list);
+    assert.equal(dups.length, 1);
+    assert.equal(dups[0].personA.id, '1');
+    assert.equal(dups[0].personB.id, '2');
+    assert.ok(dups[0].similarityScore >= 90);
+  });
+
+  it('computes upcoming birthdays and memorial days within window', () => {
+    const refDate = new Date(2026, 4, 1); // May 1, 2026
+    const list = [
+      { id: '1', first_name: 'Тэмүүлэн', last_name: 'Бат', is_alive: true, birth_date: '1996-05-10' },
+      { id: '2', first_name: 'Өвөө', last_name: 'Дорж', is_alive: false, birth_date: '1930-01-01', death_date: '2016-05-20' },
+    ];
+    const reminders = getUpcomingFamilyReminders(list, refDate, 30);
+    assert.equal(reminders.length, 2);
+    assert.equal(reminders[0].kind, 'birthday');
+    assert.equal(reminders[0].daysUntil, 9);
+    assert.equal(reminders[1].kind, 'memorial');
+    assert.equal(reminders[1].daysUntil, 19);
+  });
+});

@@ -5,6 +5,7 @@ import {
   Archive,
   ArrowRight,
   BookOpen,
+  Calendar,
   GitFork,
   Heart,
   Search,
@@ -29,6 +30,7 @@ import {
   User,
   personName,
 } from '../../lib/api';
+import { getUpcomingFamilyReminders } from '../../lib/duplicates';
 
 type TreeNode = {
   id: string;
@@ -518,6 +520,11 @@ function DashboardContent() {
     [people, tree, user?.person_id],
   );
 
+  const upcomingReminders = useMemo(
+    () => getUpcomingFamilyReminders(people, new Date(), 60),
+    [people],
+  );
+
   const activity = useMemo<ActivityItem[]>(() => {
     const result: ActivityItem[] = [];
 
@@ -744,7 +751,7 @@ function DashboardContent() {
             <div className="homev2-panel homev2-panel--snapshot">
               <div className="homev2-section-header homev2-section-header--compact">
                 <div>
-                  <p className="homev2-eyebrow">FAMILY SNAPSHOT</p>
+                  <p className="homev2-eyebrow">ГЭР БҮЛИЙН БАГЦ ТОО</p>
                   <h2>Манай гэр бүл</h2>
                 </div>
               </div>
@@ -754,15 +761,54 @@ function DashboardContent() {
                 <div><strong>{memoryCount}</strong><span>Дурсамж</span></div>
                 <div><strong>{archives?.total ?? '—'}</strong><span>Архив</span></div>
               </div>
+              {upcomingReminders.length > 0 && (
+                <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--parchment-border, #e2d9c8)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontSize: '11.5px', fontWeight: 700, color: 'var(--ink-secondary, #485c53)' }}>
+                    <Calendar size={14} /> Ойрын тэмдэглэлт ба дурсгалын өдрүүд
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {upcomingReminders.slice(0, 3).map((rem) => (
+                      <button
+                        type="button"
+                        key={`${rem.kind}-${rem.personId}`}
+                        onClick={() => openProfile(rem.personId)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                          padding: '7px 10px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--parchment-border, #e2d9c8)',
+                          background: 'rgba(255,255,255,0.65)',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          fontSize: '12px',
+                        }}
+                      >
+                        <span>
+                          <strong>{rem.personName}</strong>{' '}
+                          <span style={{ color: 'var(--ink-muted, #74857b)' }}>
+                            · {rem.kind === 'birthday' ? 'Төрсөн өдөр' : 'Дурсгалын өдөр'} ({rem.dateStr})
+                          </span>
+                        </span>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: rem.daysUntil === 0 ? '#059669' : '#b45309', whiteSpace: 'nowrap' }}>
+                          {rem.daysUntil === 0 ? 'Өнөөдөр' : `${rem.daysUntil} хоногийн дараа`}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
           <section className="homev2-panel" aria-labelledby="recent-title">
             <div className="homev2-section-header">
               <div>
-                <p className="homev2-eyebrow">RECENT</p>
+                <p className="homev2-eyebrow">СҮҮЛД НЭМЭГДСЭН</p>
                 <h2 id="recent-title">Сүүлийн үеийн</h2>
-                <p>Одоогийн family context дээрх бодит агуулгаас.</p>
+                <p>Гэр бүлийн санд шинээр нэмэгдсэн түүх, дурсамж, архивын баримтууд.</p>
               </div>
               <div className="homev2-recent-links">
                 <Link href={'/stories?family=' + encodeURIComponent(family?.id ?? '')}>Түүх <ArrowRight size={14} /></Link>

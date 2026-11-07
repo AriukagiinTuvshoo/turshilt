@@ -2,28 +2,28 @@
 
 from datetime import UTC, date, datetime
 from uuid import uuid4
+
 from sqlalchemy import select
 
 from app.auth import _password_hash
 from app.db import SessionLocal
 from app.models import (
-    User,
-    LoginIdentity,
+    Biography,
+    Branch,
     Family,
     FamilyMember,
-    Lineage,
-    Branch,
-    Person,
     FamilyPerson,
-    UserPersonLink,
-    ParentChildRelationship,
-    Marriage,
-    Biography,
     LifeEvent,
+    Lineage,
+    LoginIdentity,
+    Marriage,
+    Memory,
+    ParentChildRelationship,
+    Person,
     Story,
     StoryPerson,
-    Memory,
-    AuditLog,
+    User,
+    UserPersonLink,
 )
 
 

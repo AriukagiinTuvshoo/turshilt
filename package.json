@@ -7,6 +7,7 @@
     "dev": "next dev --hostname 0.0.0.0",
     "build": "node scripts/verify-production-env.mjs && next build",
     "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/frontend.test.ts",
     "start": "next start --hostname 0.0.0.0"
   },
   "dependencies": {

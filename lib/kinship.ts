@@ -344,12 +344,22 @@ function checkIfPaternalLine(
   parentsOf: Map<string, string[]>,
   peopleMap: Map<string, KinshipPerson>
 ): boolean {
-  // Check if first step child of ancestorId is male
-  const parents = parentsOf.get(descendantId) || [];
-  for (const p of parents) {
-    if (p === ancestorId) {
-      const child = peopleMap.get(descendantId);
-      return child?.gender?.toLowerCase() === 'male';
+  // Walk up from descendantId until we find a direct child of ancestorId
+  const queue: string[] = [descendantId];
+  const visited = new Set<string>([descendantId]);
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    const parents = parentsOf.get(currentId) || [];
+    for (const p of parents) {
+      if (p === ancestorId) {
+        const intermediateChild = peopleMap.get(currentId);
+        return intermediateChild?.gender?.toLowerCase() === 'male';
+      }
+      if (!visited.has(p)) {
+        visited.add(p);
+        queue.push(p);
+      }
     }
   }
   return true;

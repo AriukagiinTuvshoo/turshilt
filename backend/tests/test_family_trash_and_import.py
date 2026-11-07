@@ -1,6 +1,4 @@
-from uuid import UUID
 from conftest import register_verified
-from app.models import FamilyMember
 
 
 def test_family_trash_lifecycle_and_restore(client, database):
@@ -209,4 +207,30 @@ def test_person_minor_flag(client, database):
         json={"first_name": "Тодорхойгүй", "last_name": "Бат", "gender": "male", "birth_date": None, "is_alive": True},
     ).json()
     assert p_unknown["is_minor"] is False
+
+
+def test_family_chat_message_delete_and_permissions(client, database):
+    assert register_verified(client, "chat-del-owner@example.com").status_code == 201
+    family = client.post("/api/v1/families", json={"name": "Чат устгах тест"}).json()
+    fid = family["id"]
+
+    msg_resp = client.post(
+        f"/api/v1/families/{fid}/chat/messages",
+        json={"content": "Энэ зурвасыг удахгүй устгана."},
+    )
+    assert msg_resp.status_code == 200
+    msg_id = msg_resp.json()["id"]
+
+    # Verify message is listed
+    msgs = client.get(f"/api/v1/families/{fid}/chat/messages").json()
+    assert any(m["id"] == msg_id for m in msgs)
+
+    # Delete message
+    del_resp = client.delete(f"/api/v1/families/{fid}/chat/messages/{msg_id}")
+    assert del_resp.status_code == 204
+
+    # Verify message is gone
+    msgs_after = client.get(f"/api/v1/families/{fid}/chat/messages").json()
+    assert all(m["id"] != msg_id for m in msgs_after)
+
 

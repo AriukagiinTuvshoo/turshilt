@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download, Printer, Copy, Check, X, Sparkles, Sliders, Shield } from 'lucide-react';
+import { Download, Printer, Copy, Check, X, Sparkles, Sliders, Shield, FileSpreadsheet } from 'lucide-react';
 import { Family, TreeData, TreePerson, personName } from '../lib/api';
 import { AdvancedTreeLayout } from '../lib/tree-layout';
+import { exportToGedcom } from '../lib/gedcom';
 
 export interface TreeExportModalProps {
   isOpen: boolean;
@@ -481,6 +482,29 @@ export function TreeExportModal({
                 onClick={handlePrint}
               >
                 <Printer size={16} /> Хэвлэх (PDF / Print)
+              </button>
+
+              <button
+                type="button"
+                className="tree-button tree-button--secondary"
+                onClick={() => {
+                  if (!family || !tree) return;
+                  const gedString = exportToGedcom(
+                    family.name,
+                    tree.persons,
+                    tree.parent_child_relationships,
+                    tree.marriages
+                  );
+                  const blob = new Blob([gedString], { type: 'text/plain;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${family.name.replace(/\s+/g, '_')}_uragiin_bichig.ged`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <FileSpreadsheet size={16} /> GEDCOM (.GED) татах
               </button>
 
               <button

@@ -50,6 +50,9 @@ import {
 } from '../../lib/api';
 import { PedigreeWizardModal, RelativeRole } from '../../components/pedigree-wizard-modal';
 import { PedigreeCertificateModal } from '../../components/pedigree-certificate-modal';
+import { ConfirmDialog } from '../../components/confirm-dialog';
+import { exportToGedcom, parseGedcom } from '../../lib/gedcom';
+import { findDuplicatePeople } from '../../lib/duplicates';
 
 type Member = {
   user_id: string;
@@ -190,6 +193,39 @@ function AdminContent() {
   const [certificateOpen, setCertificateOpen] = useState(false);
   const [importingBackup, setImportingBackup] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const gedcomFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Accessible Confirmation Dialog State
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'danger' | 'warning' | 'primary';
+    onConfirm: () => Promise<void> | void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const requestConfirm = (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'danger' | 'warning' | 'primary';
+    onConfirm: () => Promise<void> | void;
+  }) => {
+    setConfirmState({
+      isOpen: true,
+      title: opts.title,
+      message: opts.message,
+      confirmLabel: opts.confirmLabel ?? 'Батлах',
+      variant: opts.variant ?? 'danger',
+      onConfirm: opts.onConfirm,
+    });
+  };
 
   // Pedigree Wizard Modal State
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -452,7 +488,7 @@ function AdminContent() {
   };
 
   // 3. DELETE PERSON (With Orphan Prevention Guard)
-  const handleDeletePerson = async (person: Person) => {
+  const handleDeletePerson = (person: Person) => {
     if (!selectedFamilyId || actionBusy) return;
     const name = `${person.last_name ? person.last_name + ' ' : ''}${person.first_name}`;
     const childEdges = (treeData?.parent_child_relationships || []).filter(
@@ -460,24 +496,32 @@ function AdminContent() {
     );
     const childCount = childEdges.length;
     const confirmPrompt = childCount > 0
-      ? `⚠️ ӨНЧРӨХӨӨС СЭРГИЙЛЭХ АНХААРУУЛГА:\n\n"${name}" хүнд модонд шууд холбогдсон ${childCount} үр хүүхэд байна!\nЭнэ хүнийг модноос хасвал үр хүүхдүүдийнх нь уг шугам тасрах эрсдэлтэй.\n\nТа энэ хүнийг бүртгэлээс хасахдаа үнэхээр итгэлтэй байна уу?`
-      : `Та "${name}" хүнийг энэ гэр бүлийн ургийн модноос хасахдаа 100% итгэлтэй байна уу?`;
+      ? `"${name}" хүнд модонд шууд холбогдсон ${childCount} үр хүүхэд байна. Энэ хүнийг модноос хасвал үр хүүхдүүдийнх нь уг шугам тасрах эрсдэлтэй.\n\nХасвал 30 хоногийн дотор Хогийн савнаас буцаан сэргээж болно.`
+      : `"${name}" хүнийг ургийн модноос хасах уу? Хассаны дараа 30 хоногийн дотор Хогийн савнаас буцаан сэргээх боломжтой.`;
 
-    if (!confirm(confirmPrompt)) return;
-    setActionBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await api<void>(`/families/${selectedFamilyId}/persons/${person.id}`, {
-        method: 'DELETE',
-      });
-      setNotice(`"${name}" хүн хогийн сав руу шилжлээ. Хэрэгтэй үед "Хогийн сав" цэснээс буцаан сэргээж болно.`);
-      await loadDetails(selectedFamilyId);
-    } catch (cause) {
-      setError(friendlyError(cause, 'Хүн устгаж чадсангүй.'));
-    } finally {
-      setActionBusy(false);
-    }
+    requestConfirm({
+      title: 'Хүний бүртгэлийг модноос хасах',
+      message: confirmPrompt,
+      confirmLabel: 'Хогийн сав руу шилжүүлэх',
+      variant: childCount > 0 ? 'danger' : 'warning',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setActionBusy(true);
+        setError('');
+        setNotice('');
+        try {
+          await api<void>(`/families/${selectedFamilyId}/persons/${person.id}`, {
+            method: 'DELETE',
+          });
+          setNotice(`"${name}" хүн хогийн сав руу шилжлээ.`);
+          await loadDetails(selectedFamilyId);
+        } catch (cause) {
+          setError(friendlyError(cause, 'Хүн устгаж чадсангүй.'));
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
   };
 
   // 4. ADD PARENT-CHILD RELATIONSHIP
@@ -541,23 +585,30 @@ function AdminContent() {
   };
 
   // 6. DELETE MARRIAGE
-  const handleDeleteMarriage = async (marriageId: string) => {
+  const handleDeleteMarriage = (marriageId: string) => {
     if (!selectedFamilyId || actionBusy) return;
-    if (!confirm('Энэ гэрлэлтийн холбоосыг цуцлах уу?')) return;
-    setActionBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await api<void>(`/families/${selectedFamilyId}/marriages/${marriageId}`, {
-        method: 'DELETE',
-      });
-      setNotice('Гэрлэлтийн холбоосыг устгалаа.');
-      await loadDetails(selectedFamilyId);
-    } catch (cause) {
-      setError(friendlyError(cause, 'Гэрлэлт цуцлахад алдаа гарлаа.'));
-    } finally {
-      setActionBusy(false);
-    }
+    requestConfirm({
+      title: 'Гэрлэлтийн холбоос цуцлах',
+      message: 'Энэ хосын гэрлэлтийн холбоосыг ургийн модноос устгах уу?',
+      confirmLabel: 'Холбоос цуцлах',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setActionBusy(true);
+        setError('');
+        setNotice('');
+        try {
+          await api<void>(`/families/${selectedFamilyId}/marriages/${marriageId}`, {
+            method: 'DELETE',
+          });
+          setNotice('Гэрлэлтийн холбоосыг устгалаа.');
+          await loadDetails(selectedFamilyId);
+        } catch (cause) {
+          setError(friendlyError(cause, 'Гэрлэлт цуцлахад алдаа гарлаа.'));
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
   };
 
   // 7. UPDATE MEMBER ROLE
@@ -581,23 +632,30 @@ function AdminContent() {
   };
 
   // 8. REMOVE MEMBER
-  const handleRemoveMember = async (targetUserId: string, name: string) => {
+  const handleRemoveMember = (targetUserId: string, name: string) => {
     if (!selectedFamilyId || actionBusy) return;
-    if (!confirm(`Та "${name}" хэрэглэгчийг гэр бүлээс хасахдаа итгэлтэй байна уу?`)) return;
-    setActionBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await api<void>(`/families/${selectedFamilyId}/members/${targetUserId}`, {
-        method: 'DELETE',
-      });
-      setNotice(`"${name}" хэрэглэгчийг гэр бүлээс хаслаа.`);
-      await loadDetails(selectedFamilyId);
-    } catch (cause) {
-      setError(friendlyError(cause, 'Гишүүнийг хасаж чадсангүй.'));
-    } finally {
-      setActionBusy(false);
-    }
+    requestConfirm({
+      title: 'Гишүүнийг гэр бүлээс хасах',
+      message: `"${name}" хэрэглэгчийг энэ гэр бүлийн гишүүнчлэлээс хасах уу?`,
+      confirmLabel: 'Гишүүнийг хасах',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setActionBusy(true);
+        setError('');
+        setNotice('');
+        try {
+          await api<void>(`/families/${selectedFamilyId}/members/${targetUserId}`, {
+            method: 'DELETE',
+          });
+          setNotice(`"${name}" хэрэглэгчийг гэр бүлээс хаслаа.`);
+          await loadDetails(selectedFamilyId);
+        } catch (cause) {
+          setError(friendlyError(cause, 'Гишүүнийг хасаж чадсангүй.'));
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
   };
 
   const handleLinkMember = async (targetUserId: string, personId: string) => {
@@ -621,23 +679,31 @@ function AdminContent() {
     }
   };
 
-  const handleUnlinkMember = async (targetUserId: string, memberName: string) => {
+  const handleUnlinkMember = (targetUserId: string, memberName: string) => {
     if (!selectedFamilyId || !targetUserId || actionBusy) return;
-    if (!confirm(`“${memberName}” гишүүний ургийн модон дахь хүний холбоосыг салгах уу?`)) return;
-    setActionBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await api(`/families/${selectedFamilyId}/members/${targetUserId}/unlink-person`, {
-        method: 'DELETE',
-      });
-      setNotice(`"${memberName}" гишүүний ургийн холбоосыг салгалаа.`);
-      await loadDetails(selectedFamilyId);
-    } catch (cause) {
-      setError(friendlyError(cause, 'Холбоосыг салгаж чадсангүй.'));
-    } finally {
-      setActionBusy(false);
-    }
+    requestConfirm({
+      title: 'Хүнтэй холбосон холбоос салгах',
+      message: `“${memberName}” гишүүний ургийн модон дахь хүний холбоосыг салгах уу?`,
+      confirmLabel: 'Холбоос салгах',
+      variant: 'warning',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setActionBusy(true);
+        setError('');
+        setNotice('');
+        try {
+          await api(`/families/${selectedFamilyId}/members/${targetUserId}/unlink-person`, {
+            method: 'DELETE',
+          });
+          setNotice(`"${memberName}" гишүүний ургийн холбоосыг салгалаа.`);
+          await loadDetails(selectedFamilyId);
+        } catch (cause) {
+          setError(friendlyError(cause, 'Холбоосыг салгаж чадсангүй.'));
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
   };
 
   // 9. SEND INVITATION
@@ -671,44 +737,68 @@ function AdminContent() {
   };
 
   // 10. REVOKE INVITATION
-  const handleRevokeInvite = async (invitationId: string, email: string) => {
+  const handleRevokeInvite = (invitationId: string, email: string) => {
     if (!selectedFamilyId || actionBusy) return;
-    if (!confirm(`“${email}” хаягийн урилгыг цуцлах уу?`)) return;
-    setActionBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await api<void>(`/families/${selectedFamilyId}/invitations/${invitationId}`, { method: 'DELETE' });
-      setNotice('Урилгыг цуцаллаа.');
-      await loadDetails(selectedFamilyId);
-    } catch (cause) {
-      setError(friendlyError(cause, 'Урилгыг цуцалж чадсангүй.'));
-    } finally {
-      setActionBusy(false);
-    }
+    requestConfirm({
+      title: 'Урилга цуцлах',
+      message: `“${email}” хаягийн урилгыг хүчингүй болгох уу?`,
+      confirmLabel: 'Урилга цуцлах',
+      variant: 'warning',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setActionBusy(true);
+        setError('');
+        setNotice('');
+        try {
+          await api<void>(`/families/${selectedFamilyId}/invitations/${invitationId}`, { method: 'DELETE' });
+          setNotice('Урилгыг цуцаллаа.');
+          await loadDetails(selectedFamilyId);
+        } catch (cause) {
+          setError(friendlyError(cause, 'Урилгыг цуцалж чадсангүй.'));
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
   };
 
   // 11. DELETE STORY / MEMORY
-  const handleDeleteStory = async (storyId: string) => {
-    if (!selectedFamilyId || !confirm('Энэ түүхийг бүрмөсөн устгах уу?')) return;
-    try {
-      await api<void>(`/families/${selectedFamilyId}/stories/${storyId}`, { method: 'DELETE' });
-      setNotice('Түүх устгагдлаа.');
-      await loadDetails(selectedFamilyId);
-    } catch (cause) {
-      setError(friendlyError(cause, 'Түүхийг устгаж чадсангүй.'));
-    }
+  const handleDeleteStory = (storyId: string) => {
+    if (!selectedFamilyId) return;
+    requestConfirm({
+      title: 'Түүх устгах',
+      message: 'Энэ түүхийг устгах уу?',
+      confirmLabel: 'Түүх устгах',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await api<void>(`/families/${selectedFamilyId}/stories/${storyId}`, { method: 'DELETE' });
+          setNotice('Түүх устгагдлаа.');
+          await loadDetails(selectedFamilyId);
+        } catch (cause) {
+          setError(friendlyError(cause, 'Түүхийг устгаж чадсангүй.'));
+        }
+      },
+    });
   };
 
-  const handleDeleteMemory = async (memoryId: string) => {
-    if (!selectedFamilyId || !confirm('Энэ дурсамжийг бүрмөсөн устгах уу?')) return;
-    try {
-      await api<void>(`/families/${selectedFamilyId}/memories/${memoryId}`, { method: 'DELETE' });
-      setNotice('Дурсамж устгагдлаа.');
-      await loadDetails(selectedFamilyId);
-    } catch (cause) {
-      setError(friendlyError(cause, 'Дурсамжийг устгаж чадсангүй.'));
-    }
+  const handleDeleteMemory = (memoryId: string) => {
+    if (!selectedFamilyId) return;
+    requestConfirm({
+      title: 'Дурсамж устгах',
+      message: 'Энэ дурсамжийг устгах уу?',
+      confirmLabel: 'Дурсамж устгах',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await api<void>(`/families/${selectedFamilyId}/memories/${memoryId}`, { method: 'DELETE' });
+          setNotice('Дурсамж устгагдлаа.');
+          await loadDetails(selectedFamilyId);
+        } catch (cause) {
+          setError(friendlyError(cause, 'Дурсамжийг устгаж чадсангүй.'));
+        }
+      },
+    });
   };
 
   // 12. SAVE FAMILY INFO
@@ -774,43 +864,57 @@ function AdminContent() {
   };
 
   // 15. PURGE SINGLE TRASH RECORD
-  const handlePurgeTrash = async (item: FamilyTrashItem) => {
+  const handlePurgeTrash = (item: FamilyTrashItem) => {
     if (!selectedFamilyId || actionBusy) return;
-    if (!confirm(`"${item.person_name}" хүний түүхийг хогийн савнаас бүрмөсөн устгах уу? Энэ үйлдлийг буцаах боломжгүй.`)) return;
-    try {
-      setActionBusy(true);
-      setError('');
-      setNotice('');
-      await api<void>(`/families/${selectedFamilyId}/trash/${item.id}`, {
-        method: 'DELETE',
-      });
-      setNotice(`"${item.person_name}" хогийн савнаас бүрмөсөн устгагдлаа.`);
-      setTrashItems((prev) => prev.filter((t) => t.id !== item.id));
-    } catch (cause) {
-      setError(friendlyError(cause, 'Устгаж чадсангүй.'));
-    } finally {
-      setActionBusy(false);
-    }
+    requestConfirm({
+      title: 'Хогийн савнаас бүрмөсөн устгах',
+      message: `"${item.person_name}" хүний түүхийг хогийн савнаас бүрмөсөн устгах уу? Энэ үйлдлийг буцаах боломжгүй.`,
+      confirmLabel: 'Бүрмөсөн устгах',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setActionBusy(true);
+          setError('');
+          setNotice('');
+          await api<void>(`/families/${selectedFamilyId}/trash/${item.id}`, {
+            method: 'DELETE',
+          });
+          setNotice(`"${item.person_name}" хогийн савнаас бүрмөсөн устгагдлаа.`);
+          setTrashItems((prev) => prev.filter((t) => t.id !== item.id));
+        } catch (cause) {
+          setError(friendlyError(cause, 'Устгаж чадсангүй.'));
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
   };
 
   // 16. EMPTY ALL TRASH
-  const handleEmptyTrash = async () => {
+  const handleEmptyTrash = () => {
     if (!selectedFamilyId || actionBusy || trashItems.length === 0) return;
-    if (!confirm(`Хогийн саванд буй бүх (${trashItems.length}) бичлэгийг бүрмөсөн цэвэрлэх үү? Энэ үйлдлийг буцаах боломжгүй.`)) return;
-    try {
-      setActionBusy(true);
-      setError('');
-      setNotice('');
-      await api<void>(`/families/${selectedFamilyId}/trash/empty`, {
-        method: 'POST',
-      });
-      setNotice('Хогийн сав бүрэн цэвэрлэгдлээ.');
-      setTrashItems([]);
-    } catch (cause) {
-      setError(friendlyError(cause, 'Хогийн савыг цэвэрлэж чадсангүй.'));
-    } finally {
-      setActionBusy(false);
-    }
+    requestConfirm({
+      title: 'Хогийн сав цэвэрлэх',
+      message: `Хогийн саванд буй бүх (${trashItems.length}) бичлэгийг бүрмөсөн цэвэрлэх үү? Энэ үйлдлийг буцаах боломжгүй.`,
+      confirmLabel: 'Бүгдийг цэвэрлэх',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setActionBusy(true);
+          setError('');
+          setNotice('');
+          await api<void>(`/families/${selectedFamilyId}/trash/empty`, {
+            method: 'POST',
+          });
+          setNotice('Хогийн сав бүрэн цэвэрлэгдлээ.');
+          setTrashItems([]);
+        } catch (cause) {
+          setError(friendlyError(cause, 'Хогийн савыг цэвэрлэж чадсангүй.'));
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
   };
 
   // 17. IMPORT BACKUP JSON DATA
@@ -856,6 +960,59 @@ function AdminContent() {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  // 18. GEDCOM EXPORT & IMPORT
+  const handleExportGedcom = () => {
+    if (!selectedFamily || !people.length) return;
+    const gedString = exportToGedcom(
+      selectedFamily.name,
+      people,
+      treeData?.parent_child_relationships || [],
+      marriages
+    );
+    const blob = new Blob([gedString], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `guulin-${selectedFamily.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.ged`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setNotice('GEDCOM 5.5.1 (.ged) файлыг амжилттай татаж авлаа.');
+  };
+
+  const handleImportGedcom = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedFamilyId) return;
+    try {
+      setImportingBackup(true);
+      setError('');
+      setNotice('');
+      const text = await file.text();
+      const parsed = parseGedcom(text);
+      if (parsed.people.length === 0) {
+        throw new Error('Оруулсан GEDCOM файлд хүний бүртгэл олдсонгүй.');
+      }
+      const res = await api<FamilyImportResult>(`/families/${selectedFamilyId}/import`, {
+        method: 'POST',
+        body: JSON.stringify({
+          people: parsed.people,
+          parent_child_relationships: parsed.parent_child_relationships,
+          marriages: parsed.marriages,
+        }),
+      });
+      setNotice(
+        `GEDCOM файл амжилттай импортлогдлоо: ${res.imported_people} хүн, ${res.imported_relationships} эцэг эхийн холбоос, ${res.imported_marriages} гэрлэлт оруулав.`
+      );
+      await loadDetails(selectedFamilyId);
+    } catch (cause) {
+      setError(friendlyError(cause, 'GEDCOM файл уншихад алдаа гарлаа.'));
+    } finally {
+      setImportingBackup(false);
+      if (gedcomFileInputRef.current) gedcomFileInputRef.current.value = '';
+    }
+  };
+
+  const duplicateCandidates = useMemo(() => findDuplicatePeople(people), [people]);
 
   const filteredPeople = useMemo(() => {
     if (!personSearch.trim()) return people;
@@ -1014,39 +1171,23 @@ function AdminContent() {
             </select>
           </div>
 
-          {/* Navigation Tabs */}
+          {/* Primary 4-Group Navigation (Hick's Law) */}
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={() => setActiveTab('people')}
-              className={`homev2-button ${activeTab === 'people' ? 'homev2-button--primary' : 'homev2-button--light'}`}
+              className={`homev2-button ${activeTab === 'people' || activeTab === 'relationships' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              Хүмүүс ({people.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('relationships')}
-              className={`homev2-button ${activeTab === 'relationships' ? 'homev2-button--primary' : 'homev2-button--light'}`}
-              style={{ fontSize: '12px', padding: '6px 14px' }}
-            >
-              Холбоос ({marriages.length})
+              Хүмүүс ба Ураг ({people.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('members')}
-              className={`homev2-button ${activeTab === 'members' ? 'homev2-button--primary' : 'homev2-button--light'}`}
+              className={`homev2-button ${activeTab === 'members' || activeTab === 'invitations' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              Гишүүд ({members.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('invitations')}
-              className={`homev2-button ${activeTab === 'invitations' ? 'homev2-button--primary' : 'homev2-button--light'}`}
-              style={{ fontSize: '12px', padding: '6px 14px' }}
-            >
-              Урилга ({invitations.length})
+              Гишүүд ба Урилга ({members.length})
             </button>
             <button
               type="button"
@@ -1058,34 +1199,146 @@ function AdminContent() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('audit')}
-              className={`homev2-button ${activeTab === 'audit' ? 'homev2-button--primary' : 'homev2-button--light'}`}
+              onClick={() => setActiveTab('settings')}
+              className={`homev2-button ${activeTab === 'settings' || activeTab === 'audit' || activeTab === 'trash' ? 'homev2-button--primary' : 'homev2-button--light'}`}
               style={{ fontSize: '12px', padding: '6px 14px' }}
             >
-              Түүх ({auditLogs.length})
+              Тохиргоо {trashItems.length > 0 ? `(${trashItems.length})` : ''}
+            </button>
+          </div>
+        </div>
+
+        {/* Sub-navigation pills for active group */}
+        {(activeTab === 'people' || activeTab === 'relationships') && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setActiveTab('people')}
+              className={`homev2-button ${activeTab === 'people' ? 'homev2-button--primary' : 'homev2-button--light'}`}
+              style={{ fontSize: '11.5px', padding: '5px 14px' }}
+            >
+              Хүмүүсийн бүртгэл ({people.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('relationships')}
+              className={`homev2-button ${activeTab === 'relationships' ? 'homev2-button--primary' : 'homev2-button--light'}`}
+              style={{ fontSize: '11.5px', padding: '5px 14px' }}
+            >
+              Ураг ба Гэрлэлтийн холбоос ({marriages.length})
+            </button>
+          </div>
+        )}
+
+        {(activeTab === 'members' || activeTab === 'invitations') && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setActiveTab('members')}
+              className={`homev2-button ${activeTab === 'members' ? 'homev2-button--primary' : 'homev2-button--light'}`}
+              style={{ fontSize: '11.5px', padding: '5px 14px' }}
+            >
+              Гишүүд ба Эрх ({members.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('invitations')}
+              className={`homev2-button ${activeTab === 'invitations' ? 'homev2-button--primary' : 'homev2-button--light'}`}
+              style={{ fontSize: '11.5px', padding: '5px 14px' }}
+            >
+              Урилга илгээх ({invitations.length})
+            </button>
+          </div>
+        )}
+
+        {(activeTab === 'settings' || activeTab === 'audit' || activeTab === 'trash') && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setActiveTab('settings')}
+              className={`homev2-button ${activeTab === 'settings' ? 'homev2-button--primary' : 'homev2-button--light'}`}
+              style={{ fontSize: '11.5px', padding: '5px 14px' }}
+            >
+              Ерөнхий тохиргоо
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('audit')}
+              className={`homev2-button ${activeTab === 'audit' ? 'homev2-button--primary' : 'homev2-button--light'}`}
+              style={{ fontSize: '11.5px', padding: '5px 14px' }}
+            >
+              Үйлдлийн бүртгэл ({auditLogs.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('trash')}
               className={`homev2-button ${activeTab === 'trash' ? 'homev2-button--primary' : 'homev2-button--light'}`}
-              style={{ fontSize: '12px', padding: '6px 14px' }}
+              style={{ fontSize: '11.5px', padding: '5px 14px' }}
             >
               Хогийн сав ({trashItems.length})
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('settings')}
-              className={`homev2-button ${activeTab === 'settings' ? 'homev2-button--primary' : 'homev2-button--light'}`}
-              style={{ fontSize: '12px', padding: '6px 14px' }}
-            >
-              Тохиргоо
-            </button>
           </div>
-        </div>
+        )}
 
         {/* TAB 1: PEOPLE & TREE CRUD */}
         {activeTab === 'people' && (
           <div className="families-main-card">
+            {duplicateCandidates.length > 0 && (
+              <details
+                style={{
+                  marginBottom: '18px',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  background: 'rgba(217, 119, 6, 0.08)',
+                  border: '1px solid rgba(217, 119, 6, 0.3)',
+                }}
+              >
+                <summary style={{ cursor: 'pointer', fontSize: '12.5px', fontWeight: 700, color: '#b45309' }}>
+                  Давхардсан байж болзошгүй {duplicateCandidates.length} бүртгэл илэрлээ (шалгах)
+                </summary>
+                <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {duplicateCandidates.map((dup, idx) => (
+                    <div
+                      key={`${dup.personA.id}-${dup.personB.id}-${idx}`}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        background: '#ffffff',
+                        border: '1px solid var(--parchment-border, #e2d9c8)',
+                        fontSize: '12px',
+                      }}
+                    >
+                      <div>
+                        <strong>{dup.personA.last_name} {dup.personA.first_name}</strong> ({dup.personA.birth_date?.slice(0, 4) || '—'})
+                        {' '}↔{' '}
+                        <strong>{dup.personB.last_name} {dup.personB.first_name}</strong> ({dup.personB.birth_date?.slice(0, 4) || '—'})
+                        <span style={{ marginLeft: '8px', color: '#74857b' }}>
+                          [{dup.reasons.join(', ')}]
+                        </span>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = people.find((p) => p.id === dup.personB.id);
+                            if (target) handleDeletePerson(target);
+                          }}
+                          className="admin-remove-btn"
+                          style={{ fontSize: '11px', padding: '3px 8px' }}
+                        >
+                          Давхардлыг хасах
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '20px' }}>
               <div>
                 <h3 style={{ font: '600 18px Georgia, serif', margin: 0, color: 'var(--ink-primary, #17372b)' }}>
@@ -2230,14 +2483,22 @@ function AdminContent() {
                 <button
                   type="button"
                   className="admin-remove-btn"
-                  onClick={async () => {
-                    if (!confirm(`“${selectedFamily.name}” гэр бүлийг архивлах уу?`)) return;
-                    try {
-                      await api(`/families/${selectedFamily.id}`, { method: 'DELETE' });
-                      router.replace('/admin');
-                    } catch (cause) {
-                      setError(friendlyError(cause, 'Архивлаж чадсангүй.'));
-                    }
+                  onClick={() => {
+                    if (!selectedFamily) return;
+                    requestConfirm({
+                      title: 'Гэр бүлийг архивлах',
+                      message: `“${selectedFamily.name}” гэр бүлийг архивлах уу?`,
+                      confirmLabel: 'Архивлах',
+                      onConfirm: async () => {
+                        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+                        try {
+                          await api(`/families/${selectedFamily.id}`, { method: 'DELETE' });
+                          router.replace('/admin');
+                        } catch (cause) {
+                          setError(friendlyError(cause, 'Архивлаж чадсангүй.'));
+                        }
+                      },
+                    });
                   }}
                   disabled={actionBusy}
                 >
@@ -2250,7 +2511,7 @@ function AdminContent() {
             <div style={{ marginTop: '36px', paddingTop: '20px', borderTop: '1px solid var(--parchment-border, #e2d9c8)' }}>
               <details style={{ cursor: 'pointer' }}>
                 <summary style={{ fontSize: '12px', color: 'var(--ink-muted, #74857b)', userSelect: 'none' }}>
-                  Нөөц өгөгдөл татах, сэргээх (JSON)
+                  Нөөц өгөгдөл татах, сэргээх (JSON / GEDCOM)
                 </summary>
                 <div style={{ marginTop: '14px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button
@@ -2259,7 +2520,7 @@ function AdminContent() {
                     className="homev2-button homev2-button--light"
                     style={{ fontSize: '11.5px', padding: '6px 14px' }}
                   >
-                    <Download size={13} style={{ display: 'inline', marginRight: '4px' }} /> Нөөц татах
+                    <Download size={13} style={{ display: 'inline', marginRight: '4px' }} /> JSON нөөц татах
                   </button>
 
                   <input
@@ -2280,7 +2541,37 @@ function AdminContent() {
                       cursor: importingBackup ? 'not-allowed' : 'pointer',
                     }}
                   >
-                    {importingBackup ? 'Уншиж байна…' : 'Нөөц файл оруулах'}
+                    {importingBackup ? 'Уншиж байна…' : 'JSON файл оруулах'}
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={handleExportGedcom}
+                    className="homev2-button homev2-button--light"
+                    style={{ fontSize: '11.5px', padding: '6px 14px' }}
+                  >
+                    <Download size={13} style={{ display: 'inline', marginRight: '4px' }} /> GEDCOM (.ged) татах
+                  </button>
+
+                  <input
+                    ref={gedcomFileInputRef}
+                    type="file"
+                    accept=".ged"
+                    onChange={handleImportGedcom}
+                    style={{ display: 'none' }}
+                    id="admin-gedcom-file-input"
+                    disabled={importingBackup}
+                  />
+                  <label
+                    htmlFor="admin-gedcom-file-input"
+                    className="homev2-button homev2-button--light"
+                    style={{
+                      fontSize: '11.5px',
+                      padding: '6px 14px',
+                      cursor: importingBackup ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {importingBackup ? 'Уншиж байна…' : 'GEDCOM (.ged) оруулах'}
                   </label>
                 </div>
               </details>
@@ -2533,6 +2824,18 @@ function AdminContent() {
           stats={stats}
           people={people}
           relationships={treeData?.parent_child_relationships || []}
+        />
+
+        {/* ACCESSIBLE CONFIRMATION DIALOG */}
+        <ConfirmDialog
+          isOpen={confirmState.isOpen}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          variant={confirmState.variant}
+          busy={actionBusy}
+          onConfirm={() => void confirmState.onConfirm()}
+          onCancel={() => setConfirmState((prev) => ({ ...prev, isOpen: false }))}
         />
 
         {/* MEMBER TO PERSON LINKING MODAL */}
