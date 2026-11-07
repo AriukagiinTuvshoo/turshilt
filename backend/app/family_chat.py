@@ -11,16 +11,14 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.db import get_db
 from app.models import (
-    AuditLog,
     ChatMessage,
-    Family,
     FamilyMember,
     FamilyPerson,
     Person,
     User,
     UserPersonLink,
 )
-from app.observability import request_id_context
+from app.permissions import _audit, _member
 
 router = APIRouter()
 
@@ -47,43 +45,6 @@ class ChatMemberOut(BaseModel):
     role: str
     person_id: UUID | None = None
     person_name: str | None = None
-
-
-def _member(db: Session, family_id: UUID, user: User, roles: set[str] | None = None):
-    member = db.scalar(
-        select(FamilyMember).where(
-            FamilyMember.family_id == family_id,
-            FamilyMember.user_id == user.id,
-        )
-    )
-    if member is None:
-        raise HTTPException(status_code=403, detail="Энэ гэр бүлийн мэдээллийг харах эрхгүй.")
-    if roles and member.role not in roles:
-        raise HTTPException(status_code=403, detail="Энэ үйлдлийг хийх эрхгүй.")
-    family = db.get(Family, family_id)
-    if family is None or family.archived_at is not None:
-        raise HTTPException(status_code=404, detail="Гэр бүл олдсонгүй.")
-    return member, family
-
-
-def _audit(
-    db: Session,
-    user: User,
-    family_id: UUID | None,
-    action: str,
-    target_type: str,
-    target_id: UUID | None,
-) -> None:
-    db.add(
-        AuditLog(
-            actor_id=user.id,
-            family_id=family_id,
-            action=action,
-            target_type=target_type,
-            target_id=target_id,
-            request_id=request_id_context.get(),
-        )
-    )
 
 
 @router.get("/{family_id}/chat/members", response_model=list[ChatMemberOut])

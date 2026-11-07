@@ -26,41 +26,57 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!isOpen) return;
-    const timer = setTimeout(() => {
-      confirmBtnRef.current?.focus();
-    }, 30);
+    const dialog = dialogRef.current;
+    if (!dialog) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) {
-        e.preventDefault();
-        onCancel();
+    if (isOpen) {
+      if (!dialog.open) {
+        try {
+          dialog.showModal();
+        } catch {
+          dialog.setAttribute('open', 'true');
+        }
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, busy, onCancel]);
+      const timer = setTimeout(() => {
+        confirmBtnRef.current?.focus();
+      }, 30);
+      return () => clearTimeout(timer);
+    } else if (dialog.open) {
+      try {
+        dialog.close();
+      } catch {
+        dialog.removeAttribute('open');
+      }
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const isDanger = variant === 'danger';
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      ref={dialogRef}
       aria-labelledby="confirm-dialog-title"
       aria-describedby="confirm-dialog-desc"
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) onCancel();
+      }}
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 10000,
+        width: '100vw',
+        height: '100vh',
+        maxWidth: 'none',
+        maxHeight: 'none',
+        margin: 0,
+        border: 'none',
         backgroundColor: 'rgba(15, 23, 42, 0.6)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
@@ -167,6 +183,6 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

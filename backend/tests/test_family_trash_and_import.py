@@ -234,3 +234,125 @@ def test_family_chat_message_delete_and_permissions(client, database):
     assert all(m["id"] != msg_id for m in msgs_after)
 
 
+def test_namesake_import_not_collapsed(client, database):
+    assert register_verified(client, "namesake-owner@example.com").status_code == 201
+    family = client.post("/api/v1/families", json={"name": "Ижил нэртэн тест"}).json()
+    fid = family["id"]
+
+    # Two different generations with identical first_name and last_name but different birth_date
+    import_payload = {
+        "people": [
+            {
+                "id": "gen1-bat",
+                "first_name": "Бат",
+                "last_name": "Боржигон",
+                "gender": "male",
+                "birth_date": "1945-03-10",
+                "is_alive": False,
+            },
+            {
+                "id": "gen3-bat",
+                "first_name": "Бат",
+                "last_name": "Боржигон",
+                "gender": "male",
+                "birth_date": "2005-07-22",
+                "is_alive": True,
+            },
+        ],
+        "parent_child_relationships": [
+            {
+                "parent_id": "gen1-bat",
+                "child_id": "gen3-bat",
+                "relationship_type": "biological",
+            }
+        ],
+        "marriages": [],
+    }
+
+    resp = client.post(f"/api/v1/families/{fid}/import", json=import_payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["imported_people"] == 2
+    assert data["imported_relationships"] == 1
+
+    persons = client.get(f"/api/v1/families/{fid}/persons").json()
+    bats = [p for p in persons if p["first_name"] == "Бат"]
+    assert len(bats) == 2
+
+
+def test_person_merge_transfers_relationships_and_marriages(client, database):
+    assert register_verified(client, "merge-owner@example.com").status_code == 201
+    family = client.post("/api/v1/families", json={"name": "Нэгтгэх тест гэр бүл"}).json()
+    fid = family["id"]
+
+    # Create target person (missing birth_place) and duplicate source person (has birth_place, child, spouse)
+    target = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={"first_name": "Дорж", "last_name": "Боржигон", "gender": "male", "birth_date": "1970-01-01"},
+    ).json()
+    source = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={
+            "first_name": "Дорж",
+            "last_name": "Боржигон",
+            "gender": "male",
+            "birth_date": "1970-01-01",
+            "birth_place": "Архангай",
+            "short_description": "Ахмад багш",
+        },
+    ).json()
+    spouse = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={"first_name": "Сараа", "last_name": "Хөх", "gender": "female", "birth_date": "1972-04-04"},
+    ).json()
+    child = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={"first_name": "Төгөлдөр", "last_name": "Дорж", "gender": "male", "birth_date": "1998-09-01"},
+    ).json()
+
+    # Link child and spouse to source (the duplicate)
+    assert (
+        client.post(
+            f"/api/v1/families/{fid}/relationships/parent-child",
+            json={"parent_id": source["id"], "child_id": child["id"], "relationship_type": "biological"},
+        ).status_code
+        == 201
+    )
+    assert (
+        client.post(
+            f"/api/v1/families/{fid}/marriages",
+            json={"person_1_id": source["id"], "person_2_id": spouse["id"], "status": "married"},
+        ).status_code
+        == 201
+    )
+
+    # Merge source into target
+    merge_resp = client.post(f"/api/v1/families/{fid}/persons/{target['id']}/merge/{source['id']}")
+    assert merge_resp.status_code == 200
+    mdata = merge_resp.json()
+    assert mdata["merged"] is True
+    assert mdata["transferred_relationships"] == 1
+    assert mdata["transferred_marriages"] == 1
+
+    # Verify target now has birth_place, child, and spouse, and source is no longer in active people
+    tree = client.get(f"/api/v1/families/{fid}/tree").json()
+    person_ids = [p["id"] for p in tree["persons"]]
+    assert target["id"] in person_ids
+    assert source["id"] not in person_ids
+
+    target_after = client.get(f"/api/v1/families/{fid}/persons/{target['id']}").json()
+    assert target_after["birth_place"] == "Архангай"
+    assert target_after["short_description"] == "Ахмад багш"
+
+    assert any(
+        e["parent_id"] == target["id"] and e["child_id"] == child["id"]
+        for e in tree["parent_child_relationships"]
+    )
+    assert any(
+        target["id"] in (m["person_1_id"], m["person_2_id"])
+        and spouse["id"] in (m["person_1_id"], m["person_2_id"])
+        for m in tree["marriages"]
+    )
+
+
+

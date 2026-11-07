@@ -4,27 +4,30 @@ import json
 import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db import get_db
 from app.models import (
-    AuditLog,
-    Family,
-    FamilyMember,
+    ArchivePerson,
+    Biography,
     FamilyPerson,
     FamilyTrashRecord,
+    LifeEvent,
     Marriage,
+    MemoryPersonTag,
     ParentChildRelationship,
     Person,
+    PhotoPersonTag,
+    StoryPerson,
     User,
 )
-from app.observability import request_id_context
+from app.permissions import _audit, _member, _person_in_family
 from app.person_search import normalize_search_name
 from app.relationships import (
     RelationshipError,
@@ -33,43 +36,6 @@ from app.relationships import (
 )
 
 router = APIRouter()
-
-
-def _member(db: Session, family_id: UUID, user: User, roles: set[str] | None = None):
-    member = db.scalar(
-        select(FamilyMember).where(
-            FamilyMember.family_id == family_id,
-            FamilyMember.user_id == user.id,
-        )
-    )
-    if member is None:
-        raise HTTPException(status_code=403, detail="Энэ гэр бүлийн мэдээллийг харах эрхгүй.")
-    if roles and member.role not in roles:
-        raise HTTPException(status_code=403, detail="Энэ үйлдлийг хийх эрхгүй.")
-    family = db.get(Family, family_id)
-    if family is None or family.archived_at is not None:
-        raise HTTPException(status_code=404, detail="Гэр бүл олдсонгүй.")
-    return member, family
-
-
-def _audit(
-    db: Session,
-    user: User,
-    family_id: UUID | None,
-    action: str,
-    target_type: str,
-    target_id: UUID | None,
-) -> None:
-    db.add(
-        AuditLog(
-            actor_id=user.id,
-            family_id=family_id,
-            action=action,
-            target_type=target_type,
-            target_id=target_id,
-            request_id=request_id_context.get(),
-        )
-    )
 
 
 class FamilyTrashOut(BaseModel):
@@ -474,27 +440,64 @@ def import_family_backup_data(
             continue
 
         raw_old_id = str(p_data.id or "")
-        existing = db.scalar(
-            select(Person)
-            .join(FamilyPerson, FamilyPerson.person_id == Person.id)
-            .where(
-                FamilyPerson.family_id == family_id,
-                Person.first_name == first_name,
-                Person.last_name == last_name,
-            )
+        incoming_birth = _parse_iso_date(p_data.birth_date)
+        incoming_gender = (
+            p_data.gender
+            if p_data.gender in {"male", "female", "other", "unknown"}
+            else "male"
         )
+
+        # 1. Exact UUID match in family (re-importing a previously exported backup)
+        existing: Person | None = None
+        if raw_old_id:
+            try:
+                old_uuid = UUID(raw_old_id)
+                existing = db.scalar(
+                    select(Person)
+                    .join(FamilyPerson, FamilyPerson.person_id == Person.id)
+                    .where(
+                        FamilyPerson.family_id == family_id,
+                        Person.id == old_uuid,
+                    )
+                )
+            except ValueError:
+                existing = None
+
+        # 2. Smart name + birth_date / gender matching (prevents collapsing namesakes across generations)
+        if existing is None:
+            candidates = list(
+                db.scalars(
+                    select(Person)
+                    .join(FamilyPerson, FamilyPerson.person_id == Person.id)
+                    .where(
+                        FamilyPerson.family_id == family_id,
+                        Person.first_name == first_name,
+                        Person.last_name == last_name,
+                    )
+                ).all()
+            )
+            for cand in candidates:
+                if cand.gender != incoming_gender and cand.gender != "unknown" and incoming_gender != "unknown":
+                    continue
+                if cand.birth_date and incoming_birth and cand.birth_date != incoming_birth:
+                    # Different birth dates -> different generation / namesake, do not collapse
+                    continue
+                existing = cand
+                break
+
         if existing:
             if raw_old_id:
                 id_map[raw_old_id] = existing.id
             continue
 
         new_person = Person(
+            id=uuid4(),
             first_name=first_name,
             last_name=last_name,
             middle_name=p_data.middle_name,
             nickname=p_data.nickname,
-            gender=p_data.gender if p_data.gender in {"male", "female", "other", "unknown"} else "male",
-            birth_date=_parse_iso_date(p_data.birth_date),
+            gender=incoming_gender,
+            birth_date=incoming_birth,
             birth_place=p_data.birth_place,
             is_alive=bool(p_data.is_alive),
             death_date=_parse_iso_date(p_data.death_date),
@@ -597,3 +600,262 @@ def import_family_backup_data(
         imported_marriages=imported_marriages_count,
         warnings=warnings,
     )
+
+
+class PersonMergeOut(BaseModel):
+    merged: bool
+    target_id: UUID
+    source_id: UUID
+    transferred_relationships: int
+    transferred_marriages: int
+
+
+@router.post(
+    "/{family_id}/persons/{target_id}/merge/{source_id}",
+    response_model=PersonMergeOut,
+)
+def merge_duplicate_persons(
+    family_id: UUID,
+    target_id: UUID,
+    source_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _member(db, family_id, user, {"owner", "editor"})
+    if target_id == source_id:
+        raise HTTPException(
+            status_code=400, detail="Ижил хүнийг өөртэй нь нэгтгэх боломжгүй."
+        )
+
+    target = _person_in_family(db, family_id, target_id)
+    source = _person_in_family(db, family_id, source_id)
+
+    # 1. Fill missing profile fields on target from source
+    for attr in (
+        "middle_name",
+        "nickname",
+        "birth_date",
+        "birth_place",
+        "death_date",
+        "death_place",
+        "short_description",
+        "profile_photo_url",
+    ):
+        if getattr(target, attr) is None and getattr(source, attr) is not None:
+            setattr(target, attr, getattr(source, attr))
+
+    # 2. Snapshot source into FamilyTrashRecord so merge is reversible from Trash Bin
+    source_edges = list(
+        db.scalars(
+            select(ParentChildRelationship).where(
+                or_(
+                    ParentChildRelationship.parent_id == source_id,
+                    ParentChildRelationship.child_id == source_id,
+                )
+            )
+        ).all()
+    )
+    source_marriages = list(
+        db.scalars(
+            select(Marriage).where(
+                or_(
+                    Marriage.person_1_id == source_id,
+                    Marriage.person_2_id == source_id,
+                )
+            )
+        ).all()
+    )
+    snapshot = {
+        "merged_into": str(target_id),
+        "edges": [
+            {
+                "parent_id": str(e.parent_id),
+                "child_id": str(e.child_id),
+                "type": e.relationship_type,
+            }
+            for e in source_edges
+        ],
+        "marriages": [
+            {
+                "person_1_id": str(m.person_1_id),
+                "person_2_id": str(m.person_2_id),
+                "status": m.status,
+                "start_date": m.start_date.isoformat() if m.start_date else None,
+                "end_date": m.end_date.isoformat() if m.end_date else None,
+            }
+            for m in source_marriages
+        ],
+    }
+    db.add(
+        FamilyTrashRecord(
+            family_id=family_id,
+            person_id=source.id,
+            person_name=f"{source.last_name} {source.first_name}".strip(),
+            deleted_by=user.id,
+            snapshot_data=json.dumps(snapshot),
+        )
+    )
+
+    # 3. Transfer parent-child relationships
+    family_person_ids = select(FamilyPerson.person_id).where(
+        FamilyPerson.family_id == family_id
+    )
+    current_edges = [
+        (p, c)
+        for p, c in db.execute(
+            select(
+                ParentChildRelationship.parent_id,
+                ParentChildRelationship.child_id,
+            ).where(
+                ParentChildRelationship.parent_id.in_(family_person_ids),
+                ParentChildRelationship.child_id.in_(family_person_ids),
+            )
+        ).all()
+        if p != source_id and c != source_id
+    ]
+
+    transferred_rels = 0
+    for edge in source_edges:
+        new_parent = target_id if edge.parent_id == source_id else edge.parent_id
+        new_child = target_id if edge.child_id == source_id else edge.child_id
+        db.delete(edge)
+        if new_parent == new_child:
+            continue
+        if any(p == new_parent and c == new_child for p, c in current_edges):
+            continue
+        try:
+            assert_parent_child_is_acyclic(current_edges, new_parent, new_child)
+            current_edges.append((new_parent, new_child))
+            db.add(
+                ParentChildRelationship(
+                    parent_id=new_parent,
+                    child_id=new_child,
+                    relationship_type=edge.relationship_type,
+                    created_by=user.id,
+                )
+            )
+            transferred_rels += 1
+        except RelationshipError:
+            pass
+
+    db.flush()
+
+    # 4. Transfer marriages
+    transferred_marriages = 0
+    for m in source_marriages:
+        other_spouse = m.person_2_id if m.person_1_id == source_id else m.person_1_id
+        status_val = m.status
+        start_val = m.start_date
+        end_val = m.end_date
+        db.delete(m)
+        db.flush()
+        if other_spouse == target_id:
+            continue
+        p1, p2 = canonical_pair(target_id, other_spouse)
+        existing_m = db.scalar(
+            select(Marriage).where(
+                Marriage.person_1_id == p1,
+                Marriage.person_2_id == p2,
+            )
+        )
+        if existing_m is None:
+            db.add(
+                Marriage(
+                    person_1_id=p1,
+                    person_2_id=p2,
+                    status=status_val,
+                    start_date=start_val,
+                    end_date=end_val,
+                    created_by=user.id,
+                )
+            )
+            transferred_marriages += 1
+
+    # 5. Transfer content tags, life events, and biography
+    for sp in db.scalars(select(StoryPerson).where(StoryPerson.person_id == source_id)).all():
+        exists = db.scalar(
+            select(StoryPerson).where(
+                StoryPerson.story_id == sp.story_id,
+                StoryPerson.person_id == target_id,
+            )
+        )
+        if exists:
+            db.delete(sp)
+        else:
+            sp.person_id = target_id
+
+    for ap in db.scalars(select(ArchivePerson).where(ArchivePerson.person_id == source_id)).all():
+        exists = db.scalar(
+            select(ArchivePerson).where(
+                ArchivePerson.archive_id == ap.archive_id,
+                ArchivePerson.person_id == target_id,
+            )
+        )
+        if exists:
+            db.delete(ap)
+        else:
+            ap.person_id = target_id
+
+    for mp in db.scalars(select(MemoryPersonTag).where(MemoryPersonTag.person_id == source_id)).all():
+        exists = db.scalar(
+            select(MemoryPersonTag).where(
+                MemoryPersonTag.memory_id == mp.memory_id,
+                MemoryPersonTag.person_id == target_id,
+            )
+        )
+        if exists:
+            db.delete(mp)
+        else:
+            mp.person_id = target_id
+
+    for pp in db.scalars(select(PhotoPersonTag).where(PhotoPersonTag.person_id == source_id)).all():
+        exists = db.scalar(
+            select(PhotoPersonTag).where(
+                PhotoPersonTag.photo_id == pp.photo_id,
+                PhotoPersonTag.person_id == target_id,
+            )
+        )
+        if exists:
+            db.delete(pp)
+        else:
+            pp.person_id = target_id
+
+    for le in db.scalars(select(LifeEvent).where(LifeEvent.person_id == source_id)).all():
+        le.person_id = target_id
+
+    source_bio = db.scalar(select(Biography).where(Biography.person_id == source_id))
+    if source_bio and source_bio.body.strip():
+        target_bio = db.scalar(select(Biography).where(Biography.person_id == target_id))
+        if target_bio:
+            if source_bio.body.strip() not in target_bio.body:
+                target_bio.body = f"{target_bio.body.rstrip()}\n\n{source_bio.body.strip()}".strip()
+        else:
+            db.add(
+                Biography(
+                    person_id=target_id,
+                    body=source_bio.body,
+                    updated_by=user.id,
+                )
+            )
+
+    # 6. Detach source from family
+    fp = db.scalar(
+        select(FamilyPerson).where(
+            FamilyPerson.family_id == family_id,
+            FamilyPerson.person_id == source_id,
+        )
+    )
+    if fp:
+        db.delete(fp)
+
+    _audit(db, user, family_id, "person.merged", "person", target_id)
+    db.commit()
+
+    return PersonMergeOut(
+        merged=True,
+        target_id=target_id,
+        source_id=source_id,
+        transferred_relationships=transferred_rels,
+        transferred_marriages=transferred_marriages,
+    )
+

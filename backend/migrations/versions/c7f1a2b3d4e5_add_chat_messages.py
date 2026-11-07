@@ -6,9 +6,8 @@ Create Date: 2026-11-06
 
 """
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from alembic import op
 
 revision = "c7f1a2b3d4e5"
 down_revision = "b3e6c9f1a204"

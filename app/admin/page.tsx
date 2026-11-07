@@ -1325,13 +1325,38 @@ function AdminContent() {
                         <button
                           type="button"
                           onClick={() => {
-                            const target = people.find((p) => p.id === dup.personB.id);
-                            if (target) handleDeletePerson(target);
+                            if (!selectedFamilyId || actionBusy) return;
+                            const nameA = `${dup.personA.last_name} ${dup.personA.first_name}`.trim();
+                            const nameB = `${dup.personB.last_name} ${dup.personB.first_name}`.trim();
+                            requestConfirm({
+                              title: 'Давхардсан бүртгэл нэгтгэх',
+                              message: `“${nameB}” бүртгэлийн бүх үр хүүхэд, гэрлэлт, дурсамж, намтрыг “${nameA}” бүртгэл рүү шилжүүлэн нэгтгэх үү? (Нэгтгэсний дараа Хогийн савнаас буцаах боломжтой)`,
+                              confirmLabel: 'Нэгтгэх',
+                              variant: 'warning',
+                              onConfirm: async () => {
+                                setConfirmState((prev) => ({ ...prev, isOpen: false }));
+                                setActionBusy(true);
+                                setError('');
+                                setNotice('');
+                                try {
+                                  await api(
+                                    `/families/${selectedFamilyId}/persons/${dup.personA.id}/merge/${dup.personB.id}`,
+                                    { method: 'POST' }
+                                  );
+                                  setNotice(`"${nameB}" бүртгэлийг "${nameA}" руу амжилттай нэгтгэлээ.`);
+                                  await loadDetails(selectedFamilyId);
+                                } catch (cause) {
+                                  setError(friendlyError(cause, 'Бүртгэлийг нэгтгэж чадсангүй.'));
+                                } finally {
+                                  setActionBusy(false);
+                                }
+                              },
+                            });
                           }}
                           className="admin-remove-btn"
                           style={{ fontSize: '11px', padding: '3px 8px' }}
                         >
-                          Давхардлыг хасах
+                          Нэгтгэх
                         </button>
                       )}
                     </div>
