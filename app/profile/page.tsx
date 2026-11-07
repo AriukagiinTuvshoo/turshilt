@@ -364,6 +364,7 @@ function ProfilePageContent() {
           death_date: values.get('death_date') || null,
           death_place: values.get('death_place') || null,
           short_description: values.get('short_description') || null,
+          profile_photo_url: values.get('profile_photo_url') || null,
           visibility: values.get('visibility'),
         }),
       });
@@ -1065,6 +1066,7 @@ function ProfilePageContent() {
                 <label><span>Нас барсан огноо</span><input name="death_date" type="date" defaultValue={person.death_date ?? ''} /></label>
                 <label><span>Нас барсан газар</span><input name="death_place" defaultValue={person.death_place ?? ''} maxLength={240} /></label>
                 <label><span>Товч тайлбар</span><input name="short_description" defaultValue={person.short_description ?? ''} maxLength={1000} /></label>
+                <label><span>Зургийн холбоос (URL)</span><input name="profile_photo_url" defaultValue={person.profile_photo_url ?? ''} maxLength={1000} placeholder="https://..." /></label>
                 <label><span>Нууцлал</span><select name="visibility" defaultValue={person.visibility}><option value="private">Зөвхөн би</option><option value="family">Гэр бүлийнхэн</option><option value="public">Нийтийн</option></select></label>
               </div>
               <div className="profile-form-actions">

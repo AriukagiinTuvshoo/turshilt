@@ -34,8 +34,8 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(["deleted_by"], ["users.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
         )
-        op.create_index("ix_family_trash_family_id", "family_trash_records", ["family_id"])
-        op.create_index("ix_family_trash_person_id", "family_trash_records", ["person_id"])
+        op.create_index("ix_family_trash_records_family_id", "family_trash_records", ["family_id"])
+        op.create_index("ix_family_trash_records_person_id", "family_trash_records", ["person_id"])
 
 
 def downgrade() -> None:

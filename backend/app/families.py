@@ -181,6 +181,7 @@ class PersonCreate(BaseModel):
     death_date: date | None = None
     death_place: str | None = Field(default=None, max_length=240)
     short_description: str | None = Field(default=None, max_length=1000)
+    profile_photo_url: str | None = Field(default=None, max_length=1000)
     visibility: str = Field(default="family", pattern="^(private|family|public)$")
 
     @model_validator(mode="after")

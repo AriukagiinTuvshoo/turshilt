@@ -25,11 +25,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.families import (
     _assert_memory_minor_scopes,
-    _assert_person_visible,
-    _audit,
-    _member,
     _memory_visible_to_member,
-    _person_in_family,
     _require_minor_scope,
 )
 from app.models import (
@@ -42,6 +38,12 @@ from app.models import (
     PhotoPersonTag,
     User,
     UserPersonLink,
+)
+from app.permissions import (
+    _assert_person_visible,
+    _audit,
+    _member,
+    _person_in_family,
 )
 from app.privacy import is_minor
 from app.storage import ObjectStorage, get_storage
