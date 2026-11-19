@@ -23,10 +23,10 @@ from sqlalchemy.orm import Session
 from app.auth import _consume_otp_rate, _normalized_ip, get_current_user
 from app.config import get_settings
 from app.db import get_db
-from app.families import (
+from app.families import _require_minor_scope
+from app.family_content import (
     _assert_memory_minor_scopes,
     _memory_visible_to_member,
-    _require_minor_scope,
 )
 from app.models import (
     FamilyMember,
