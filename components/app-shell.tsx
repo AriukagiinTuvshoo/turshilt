@@ -106,6 +106,19 @@ function familyHref(path: string, familyId: string | null) {
   return path + '?family=' + encodeURIComponent(familyId);
 }
 
+function formatRolePill(role: string) {
+  switch (role) {
+    case 'owner':
+      return '👑 Ерөнхий админ';
+    case 'admin':
+      return '🛡️ Туслах админ';
+    case 'editor':
+      return '✏️ Засварлагч';
+    default:
+      return '👤 Гишүүн';
+  }
+}
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -357,7 +370,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <span className="app-shell__context-pill">
               <TreeDeciduous size={14} aria-hidden="true" />
               <strong>{currentFamily.name}</strong>
-              <small>{currentFamily.role}</small>
+              <small>{formatRolePill(currentFamily.role)}</small>
             </span>
           ) : (
             <Link className="app-shell__context-empty" href="/families">

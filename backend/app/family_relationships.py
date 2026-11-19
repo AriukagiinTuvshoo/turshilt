@@ -280,7 +280,7 @@ def add_parent_child(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     _person_in_family(db, family_id, body.parent_id)
     _person_in_family(db, family_id, body.child_id)
     _assert_person_visible(db, _person_in_family(db, family_id, body.parent_id), user)
@@ -373,7 +373,7 @@ def remove_parent_child_by_pair(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     p = _person_in_family(db, family_id, parent_id)
     c = _person_in_family(db, family_id, child_id)
     _assert_person_visible(db, p, user)
@@ -400,7 +400,7 @@ def remove_parent_child_by_id(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     edge = db.get(ParentChildRelationship, relationship_id)
     if edge is None:
         raise HTTPException(status_code=404, detail="Эцэг эх-хүүхдийн холбоос олдсонгүй.")
@@ -429,7 +429,7 @@ def smart_connect_relatives(
     db: Session = Depends(get_db),
 ):
     """Atomically connect two family persons (parent, child, spouse, or sibling) with automatic co-parent marriage and sibling wiring."""
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     if body.anchor_person_id == body.target_person_id:
         raise HTTPException(status_code=422, detail="Хүн өөрөө өөртэйгөө ураг холбох боломжгүй.")
 
@@ -602,7 +602,7 @@ def create_marriage(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     _person_in_family(db, family_id, body.person_1_id)
     _person_in_family(db, family_id, body.person_2_id)
     _assert_person_visible(db, _person_in_family(db, family_id, body.person_1_id), user)
@@ -744,7 +744,7 @@ def update_marriage(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     marriage = db.get(Marriage, marriage_id)
     if marriage is None or marriage.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Гэрлэлтийн мэдээлэл олдсонгүй.")
@@ -780,7 +780,7 @@ def remove_marriage(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     marriage = db.get(Marriage, marriage_id)
     if marriage is None or marriage.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Гэрлэлтийн мэдээлэл олдсонгүй.")

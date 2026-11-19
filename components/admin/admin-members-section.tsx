@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useRef, useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -10,29 +10,31 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { Family, Person } from '../../lib/api';
+import { Family, FamilyMemberItem, Person } from '../../lib/api';
+import { useFocusTrap } from '../../lib/use-focus-trap';
 import {
   AdminTabKey,
   Invitation,
-  Member,
   RoleBadge,
   roleLabel,
+  permissionEmojiMeta,
 } from './admin-types';
 
 export interface AdminMembersSectionProps {
   activeTab: AdminTabKey;
   selectedFamily: Family | null;
   people: Person[];
-  members: Member[];
+  members: FamilyMemberItem[];
   invitations: Invitation[];
   isOwner: boolean;
   isAdmin: boolean;
+  canManageMembers: boolean;
   actionBusy: boolean;
   handleUpdateRole: (targetUserId: string, nextRole: string) => Promise<void>;
   handleRemoveMember: (targetUserId: string, name: string) => void;
   handleUnlinkMember: (targetUserId: string, memberName: string) => void;
-  linkingMember: Member | null;
-  setLinkingMember: (member: Member | null) => void;
+  linkingMember: FamilyMemberItem | null;
+  setLinkingMember: (member: FamilyMemberItem | null) => void;
   selectedPersonForLink: string;
   setSelectedPersonForLink: (personId: string) => void;
   linkSearchQuery: string;
@@ -40,8 +42,8 @@ export interface AdminMembersSectionProps {
   handleLinkMember: (targetUserId: string, personId: string) => Promise<void>;
   inviteEmail: string;
   setInviteEmail: (email: string) => void;
-  inviteRole: 'member' | 'editor';
-  setInviteRole: (role: 'member' | 'editor') => void;
+  inviteRole: 'admin' | 'member' | 'editor';
+  setInviteRole: (role: 'admin' | 'member' | 'editor') => void;
   createdInviteUrl: string | null;
   setCreatedInviteUrl: (url: string | null) => void;
   copiedInvite: boolean;
@@ -58,6 +60,7 @@ export function AdminMembersSection({
   invitations,
   isOwner,
   isAdmin,
+  canManageMembers,
   actionBusy,
   handleUpdateRole,
   handleRemoveMember,
@@ -81,12 +84,19 @@ export function AdminMembersSection({
   handleRevokeInvite,
 }: AdminMembersSectionProps) {
   const [nowMs] = useState(() => Date.now());
+  const linkModalRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(Boolean(linkingMember), linkModalRef, {
+    onEscape: () => setLinkingMember(null),
+  });
+
+  const canLink = isAdmin || canManageMembers;
+
   return (
     <>
       {activeTab === 'members' && (
         <div className="families-main-card">
           <div className="admin-card-header">
-            <h3 className="admin-card-title">Гишүүд ({members.length})</h3>
+            <h3 className="admin-card-title">👥 Гэр бүлийн гишүүд ({members.length})</h3>
           </div>
 
           <div className="admin-members-list">
@@ -101,33 +111,26 @@ export function AdminMembersSection({
                     <div className="admin-member-avatar">
                       {member.display_name?.slice(0, 1).toUpperCase() || '?'}
                     </div>
-                    <div>
-                      <strong style={{ display: 'block', fontSize: 14.5, color: 'var(--ink-primary, #17372b)' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <strong style={{ display: 'block', fontSize: 14.5, color: 'var(--ui-text)' }}>
                         {member.display_name}
                       </strong>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                        <RoleBadge role={member.role} />
-                        <span style={{ fontSize: 11, color: 'var(--ink-muted, #74857b)' }}>
-                          User ID: {member.user_id.slice(0, 8)}…
-                        </span>
+                        <RoleBadge role={member.role} adminTitle={member.admin_title} />
+                        {member.email ? (
+                          <span className="admin-muted-text">✉️ {member.email}</span>
+                        ) : (
+                          <span className="admin-muted-text">ID: {member.user_id.slice(0, 8)}…</span>
+                        )}
                         {member.person_id ? (
                           <span className="admin-linked-pill">
                             🌿 Модон дахь хүн:{' '}
                             {linkedP ? `${linkedP.last_name} ${linkedP.first_name}` : 'Холбогдсон'}
-                            {isAdmin && (
+                            {canLink && (
                               <button
                                 type="button"
                                 onClick={() => handleUnlinkMember(member.user_id, member.display_name)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: 'var(--ui-danger-text)',
-                                  cursor: 'pointer',
-                                  padding: '0 2px',
-                                  fontSize: 11,
-                                  marginLeft: 4,
-                                  textDecoration: 'underline',
-                                }}
+                                className="admin-inline-btn-link is-danger"
                                 title="Энэ холбоосыг салгах"
                               >
                                 Салгах
@@ -137,7 +140,7 @@ export function AdminMembersSection({
                         ) : (
                           <span className="admin-unlinked-pill">
                             ⚠️ Модонд холбогдоогүй
-                            {isAdmin && (
+                            {canLink && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -145,17 +148,7 @@ export function AdminMembersSection({
                                   setSelectedPersonForLink('');
                                   setLinkSearchQuery('');
                                 }}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: 'var(--ui-info-text)',
-                                  cursor: 'pointer',
-                                  padding: '0 2px',
-                                  fontSize: 11,
-                                  marginLeft: 4,
-                                  fontWeight: 700,
-                                  textDecoration: 'underline',
-                                }}
+                                className="admin-inline-btn-link is-info"
                               >
                                 + Хүнтэй холбох
                               </button>
@@ -163,23 +156,36 @@ export function AdminMembersSection({
                           </span>
                         )}
                       </div>
+                      {member.role === 'admin' && (member.permissions?.length ?? 0) > 0 && (
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
+                          {member.permissions!.map((perm) => {
+                            const meta = permissionEmojiMeta(perm);
+                            return (
+                              <span key={perm} className="admin-perm-chip">
+                                {meta.emoji} {meta.label}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="admin-member-right">
                     {isOwner ? (
                       <>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ink-secondary, #485c53)' }}>
-                          <span>Эрх солих:</span>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ui-text-secondary)' }}>
+                          <span>Эрх:</span>
                           <select
                             value={member.role}
                             onChange={(e) => void handleUpdateRole(member.user_id, e.target.value)}
                             disabled={actionBusy}
                             className="admin-role-select"
                           >
-                            <option value="owner">👑 Эзэмшигч (Ерөнхий Админ)</option>
-                            <option value="editor">✏️ Засварлагч (Editor)</option>
-                            <option value="member">👤 Гишүүн (Member)</option>
+                            <option value="owner">👑 Ерөнхий админ</option>
+                            <option value="admin">🛡️ Туслах админ</option>
+                            <option value="editor">✏️ Засварлагч</option>
+                            <option value="member">👤 Гишүүн</option>
                           </select>
                         </label>
                         {member.role !== 'owner' && (
@@ -195,7 +201,20 @@ export function AdminMembersSection({
                         )}
                       </>
                     ) : (
-                      <RoleBadge role={member.role} />
+                      <>
+                        <RoleBadge role={member.role} adminTitle={member.admin_title} />
+                        {canManageMembers && member.role !== 'owner' && member.role !== 'admin' && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMember(member.user_id, member.display_name)}
+                            disabled={actionBusy}
+                            className="admin-remove-btn"
+                          >
+                            <Trash2 size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                            Хасах
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -208,7 +227,7 @@ export function AdminMembersSection({
       {activeTab === 'invitations' && (
         <div className="families-main-card">
           <h3 className="admin-card-title" style={{ marginBottom: 16 }}>
-            Урилга илгээх
+            ✉️ Урилга илгээх ба Хүлээгдэж буй холбоос
           </h3>
 
           {createdInviteUrl && (
@@ -224,11 +243,12 @@ export function AdminMembersSection({
                   type="button"
                   onClick={() => setCreatedInviteUrl(null)}
                   className="admin-icon-close"
+                  aria-label="Урилгын баннер хаах"
                 >
                   <X size={16} />
                 </button>
               </div>
-              <p style={{ fontSize: 12.5, color: 'var(--ink-secondary, #485c53)', margin: '0 0 12px' }}>
+              <p className="admin-muted-text" style={{ margin: '0 0 12px' }}>
                 Уригдсан хүн рүүгээ доорх холбоосыг Telegram, Messenger, SMS эсвэл WhatsApp-аар шууд илгээнэ үү:
               </p>
 
@@ -247,15 +267,7 @@ export function AdminMembersSection({
                     setCopiedInvite(true);
                     setTimeout(() => setCopiedInvite(false), 2400);
                   }}
-                  className="homev2-button homev2-button--primary"
-                  style={{
-                    fontSize: 12.5,
-                    padding: '10px 18px',
-                    background: copiedInvite ? '#10b981' : 'linear-gradient(135deg, #059669, #047857)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
+                  className="admin-action-accent-btn"
                 >
                   {copiedInvite ? <Check size={14} /> : <Copy size={14} />}
                   {copiedInvite ? 'Хуулагдлаа!' : '1-Click Холбоос хуулах'}
@@ -263,13 +275,13 @@ export function AdminMembersSection({
               </div>
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: 11.5, color: 'var(--ink-muted, #74857b)' }}>Шууд хуваалцах:</span>
+                <span className="admin-muted-text">Шууд хуваалцах:</span>
                 <a
                   href={`https://t.me/share/url?url=${encodeURIComponent(createdInviteUrl)}&text=${encodeURIComponent(`Сайн байна уу? Гуулингийнхан систем дэх “${selectedFamily?.name}” ургийн бичигт нэгдэх урилга:`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="homev2-button homev2-button--light"
-                  style={{ fontSize: 11, padding: '4px 12px' }}
+                  style={{ fontSize: 11.5, padding: '4px 12px' }}
                 >
                   ✈️ Telegram
                 </a>
@@ -278,7 +290,7 @@ export function AdminMembersSection({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="homev2-button homev2-button--light"
-                  style={{ fontSize: 11, padding: '4px 12px' }}
+                  style={{ fontSize: 11.5, padding: '4px 12px' }}
                 >
                   💬 WhatsApp
                 </a>
@@ -286,9 +298,9 @@ export function AdminMembersSection({
             </div>
           )}
 
-          {isOwner && (
+          {canManageMembers ? (
             <form onSubmit={handleSendInvite} className="admin-inline-form">
-              <h4 className="admin-form-heading">+ Шинэ гишүүн урих & Холбоос үүсгэх</h4>
+              <h4 className="admin-form-heading">✨ Шинэ гишүүн урих &amp; Холбоос үүсгэх</h4>
               <div className="admin-form-grid">
                 <label className="admin-field-label">
                   Имэйл хаяг:
@@ -306,13 +318,15 @@ export function AdminMembersSection({
                   Олгох эрхийн үүрэг:
                   <select
                     value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value as 'member' | 'editor')}
+                    onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member' | 'editor')}
                     disabled={actionBusy}
-                    className="admin-role-select"
-                    style={{ width: '100%', marginTop: 4, height: 38 }}
+                    className="admin-field-input"
                   >
-                    <option value="member">Гишүүн (Өөрийнхийгөө засах, мод ба түүх үзэх)</option>
-                    <option value="editor">Засварлагч (Мод ба хүмүүс засах админ эрхтэй)</option>
+                    <option value="member">👤 Гишүүн (Мод, түүх, чат)</option>
+                    <option value="editor">✏️ Засварлагч (Мод ба хүмүүс засна)</option>
+                    {isOwner && (
+                      <option value="admin">🛡️ Туслах админ (Бүрэн админ эрх)</option>
+                    )}
                   </select>
                 </label>
               </div>
@@ -320,11 +334,15 @@ export function AdminMembersSection({
                 type="submit"
                 className="homev2-button homev2-button--primary"
                 disabled={actionBusy}
-                style={{ fontSize: 12, padding: '8px 20px' }}
+                style={{ fontSize: 12.5, padding: '9px 20px' }}
               >
-                {actionBusy ? 'Илгээж байна…' : 'Урилга үүсгэх & Холбоос авах'}
+                {actionBusy ? 'Илгээж байна…' : '✉️ Урилга үүсгэх & Холбоос авах'}
               </button>
             </form>
+          ) : (
+            <p className="admin-muted-text" style={{ marginBottom: 16 }}>
+              🔒 Урилга илгээхийн тулд &quot;Гишүүд &amp; Урилга&quot; админ эрх шаардлагатай.
+            </p>
           )}
 
           <h4 className="admin-form-heading">
@@ -340,25 +358,25 @@ export function AdminMembersSection({
                 return (
                   <div key={inv.id} className="admin-item-row">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <Mail size={18} style={{ color: 'var(--gold, #d9b85d)' }} />
+                      <Mail size={18} style={{ color: 'var(--ui-accent-text)' }} />
                       <div>
-                        <strong style={{ fontSize: 14, color: 'var(--ink-primary, #17372b)' }}>
+                        <strong style={{ fontSize: 14, color: 'var(--ui-text)' }}>
                           {inv.email}
                         </strong>
-                        <div style={{ fontSize: 11, color: 'var(--ink-muted, #74857b)' }}>
+                        <div className="admin-muted-text">
                           Хүчинтэй хугацаа: {new Date(inv.expires_at).toLocaleDateString('mn-MN')} ({daysLeft} хоног үлдсэн)
                         </div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <RoleBadge role={inv.role} />
-                      {isOwner && (
+                      {canManageMembers && (
                         <button
                           type="button"
                           disabled={actionBusy}
                           onClick={() => handleRevokeInvite(inv.id, inv.email)}
                           className="admin-remove-btn"
-                          style={{ padding: '4px 10px', fontSize: 11 }}
+                          style={{ padding: '4px 10px', fontSize: 11.5 }}
                         >
                           Цуцлах
                         </button>
@@ -379,26 +397,34 @@ export function AdminMembersSection({
       {linkingMember && (
         <div
           className="admin-modal-backdrop"
+          role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) setLinkingMember(null);
           }}
         >
-          <div className="admin-modal-card">
+          <div
+            ref={linkModalRef}
+            className="admin-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="link-member-modal-title"
+          >
             <div className="admin-modal-header">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <h3 className="admin-modal-title">
+                  <h3 id="link-member-modal-title" className="admin-modal-title">
                     👤 Гишүүнийг модон дахь хүнтэй холбох
                   </h3>
                   <p className="admin-modal-sub">
                     Хэрэглэгч: <strong>{linkingMember.display_name || linkingMember.email}</strong> (
-                    {roleLabel(linkingMember.role)})
+                    {roleLabel(linkingMember.role, linkingMember.admin_title)})
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setLinkingMember(null)}
                   className="admin-icon-close"
+                  aria-label="Цонх хаах"
                 >
                   <X size={20} />
                 </button>
@@ -407,7 +433,7 @@ export function AdminMembersSection({
 
             <div className="admin-modal-body">
               <p className="admin-modal-desc">
-                Энэ хэрэглэгчийг ургийн модон дахь өөрийнх нь бие хүнтэй холбосноор тухайн хэрэглэгч өөрийн нэр дээрх мэдээлэл, дурсамж, эрх зүйн статусыг автоматаар уялдуулан харах боломжтой болно.
+                Энэ хэрэглэгчийг ургийн модон дахь өөрийнх нь бие хүнтэй холбосноор өөрийн нэр дээрх мэдээлэл, дурсамж, ураг төрлийн тооцоолуурыг шууд уялдуулан харна.
               </p>
 
               <div className="admin-search-box" style={{ marginBottom: 14 }}>
@@ -435,7 +461,8 @@ export function AdminMembersSection({
                     const isSelected = selectedPersonForLink === p.id;
                     const isCurrent = linkingMember.person_id === p.id;
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={p.id}
                         onClick={() => setSelectedPersonForLink(p.id)}
                         className={`admin-link-option ${isSelected ? 'is-selected' : isCurrent ? 'is-current' : ''}`}
@@ -448,7 +475,7 @@ export function AdminMembersSection({
                             <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ui-text)' }}>
                               {p.last_name ? `${p.last_name} ` : ''}
                               {p.first_name}
-                              {p.gender === 'female' ? ' ♀' : ' ♂'}
+                              {p.gender === 'female' ? ' ♀' : p.gender === 'male' ? ' ♂' : ''}
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--ui-text-muted)' }}>
                               {p.birth_date ? p.birth_date.slice(0, 4) : 'Төрсөн он тодорхойгүй'}
@@ -457,12 +484,12 @@ export function AdminMembersSection({
                           </div>
                         </div>
                         {isCurrent && (
-                          <span className="admin-linked-pill">
-                            Одоогийн холбоос
-                          </span>
+                          <span className="admin-linked-pill">Одоогийн холбоос</span>
                         )}
-                        {isSelected && !isCurrent && <CheckCircle2 size={18} style={{ color: 'var(--ui-success-text)' }} />}
-                      </div>
+                        {isSelected && !isCurrent && (
+                          <CheckCircle2 size={18} style={{ color: 'var(--ui-success-text)' }} />
+                        )}
+                      </button>
                     );
                   })}
               </div>
@@ -482,7 +509,7 @@ export function AdminMembersSection({
                 onClick={() => void handleLinkMember(linkingMember.user_id, selectedPersonForLink)}
                 className="homev2-button homev2-button--primary"
               >
-                {actionBusy ? 'Холбож байна…' : 'Холбоосыг батлах'}
+                {actionBusy ? 'Холбож байна…' : '🔗 Холбоосыг батлах'}
               </button>
             </div>
           </div>

@@ -47,6 +47,7 @@ from app.permissions import (
     _audit,
     _member,
     _person_in_family,
+    has_permission,
 )
 from app.privacy import is_minor
 from app.storage import ObjectStorage, get_storage
@@ -101,7 +102,7 @@ def _visible_people_query(user: User, family_id: UUID):
 
 
 def _can_edit_memory(memory: Memory, member: FamilyMember, user: User) -> bool:
-    return member.role in {"owner", "editor"} or memory.created_by == user.id
+    return has_permission(member, "manage_content") or memory.created_by == user.id
 
 
 def _visible_memory(db: Session, family_id: UUID, memory_id: UUID, user: User) -> Memory:
@@ -425,7 +426,7 @@ def list_memories(
     storage: ObjectStorage = Depends(get_storage),
 ):
     member, _ = _member(db, family_id, user)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     _retry_pending_cleanup(db, storage, family_id, user)
     candidates = db.scalars(
         select(Memory).where(
@@ -977,7 +978,7 @@ async def upload_person_avatar(
     )
     is_minor_record = is_minor(person.birth_date) is True
     baseline_edit = (
-        member.role in {"owner", "editor"}
+        has_permission(member, "manage_people")
         or linked_to_user is not None
         or person.created_by == user.id
     )

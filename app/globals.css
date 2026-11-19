@@ -410,14 +410,14 @@
   border:1px solid #b49a63;border-radius:50%;
   background:#214b3d;color:#e4d19b;flex:none;
 }
-.public-home__brand strong{display:block;color:#f3ecdb;font:600 14px/1 Georgia,"Times New Roman",serif;letter-spacing:.1em}
-.public-home__brand small{display:block;margin-top:4px;color:#b7c7bb;font-size:9px}
+.public-home__brand strong{display:block;color:#17372b;font:600 14px/1 Georgia,"Times New Roman",serif;letter-spacing:.1em}
+.public-home__brand small{display:block;margin-top:4px;color:#485c53;font-size:9px}
 .public-home__nav-actions{display:flex;align-items:center;gap:16px;font-size:11px}
-.public-home__login{color:#d9e1d8}
-.public-home__login:hover,.public-home__login:focus-visible{color:#f0d99b;outline:none}
-.public-home__register{
+.public-home a.public-home__login,.public-home__login{color:#1c4234;font-weight:600}
+.public-home a.public-home__login:hover,.public-home a.public-home__login:focus-visible,.public-home__login:hover,.public-home__login:focus-visible{color:#8b6b32;outline:none}
+.public-home a.public-home__register,.public-home__register{
   display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 13px;
-  border:1px solid #9d8758;border-radius:8px;background:#eadab0;color:#173a2f;
+  border:1px solid #9d8758;border-radius:8px;background:#eadab0;color:#173a2f;font-weight:700;
 }
 .public-home__register:hover,.public-home__register:focus-visible{
   background:#f1e4c2;outline:2px solid #c8ad6e;outline-offset:2px
@@ -466,9 +466,9 @@
   display:inline-flex;align-items:center;justify-content:center;gap:7px;
   min-height:44px;padding:0 16px;border-radius:8px;font-size:11px
 }
-.public-home__primary{background:#d7bd78;border:1px solid #d7bd78;color:#18392f;font-weight:700}
-.public-home__primary:hover,.public-home__primary:focus-visible{background:#e5ce94;outline:2px solid #f1dfad;outline-offset:3px}
-.public-home__secondary{border:1px solid #688477;background:#173f32b8;color:#edf2e9}
+.public-home a.public-home__primary,.public-home__primary{background:#d7bd78;border:1px solid #d7bd78;color:#15352b;font-weight:700}
+.public-home a.public-home__primary:hover,.public-home a.public-home__primary:focus-visible,.public-home__primary:hover,.public-home__primary:focus-visible{background:#e5ce94;color:#0f2820;outline:2px solid #f1dfad;outline-offset:3px}
+.public-home a.public-home__secondary,.public-home__secondary{border:1px solid #688477;background:#173f32b8;color:#edf2e9}
 .public-home__secondary:hover,.public-home__secondary:focus-visible{background:#285746;outline:2px solid #bda56a;outline-offset:3px}
 .public-home__quiet-note{
   display:flex;align-items:center;gap:7px;margin-top:20px;color:#9eb4a8;font-size:10px

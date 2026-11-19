@@ -31,6 +31,8 @@ test.describe('Guulingiinhan Advanced & Production Workflows', () => {
       `/tree?family=${encodeURIComponent(familyId)}`,
       `/activities?family=${encodeURIComponent(familyId)}`,
       `/chat?family=${encodeURIComponent(familyId)}`,
+      `/admin?family=${encodeURIComponent(familyId)}`,
+      `/admin/admins?family=${encodeURIComponent(familyId)}`,
     ];
 
     for (const route of routes) {
@@ -275,5 +277,89 @@ test.describe('Guulingiinhan Advanced & Production Workflows', () => {
     const metricsBody = await metricsResp.text();
     expect(metricsBody).toContain('guulin_http_requests_total');
     expect(metricsBody).toContain('guulin_chat_sse_active_connections');
+  });
+
+  test('multi-page admin cockpit, sub-admin promotion/permissions UI, and data refresh', async ({ browser }) => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const ownerEmail = `e2e-adm-owner-${suffix}@example.com`;
+    const helperEmail = `e2e-adm-helper-${suffix}@example.com`;
+    const password = 'E2E-Strong-Password-2026!';
+
+    const ownerCtx = await browser.newContext();
+    const helperCtx = await browser.newContext();
+    const ownerPage = await ownerCtx.newPage();
+    const helperPage = await helperCtx.newPage();
+
+    try {
+      await registerVerifiedAndLogin(ownerPage, {
+        email: ownerEmail,
+        password,
+        displayName: 'Ерөнхий Эзэн',
+      });
+
+      const familyId = (
+        await (
+          await ownerPage.request.post(`${API_BASE}/families`, {
+            data: { name: `Админ Төв Ураг ${suffix}` },
+          })
+        ).json()
+      ).id as string;
+
+      // Add a person with extra spaces so data refresh normalizes it cleanly
+      const personResp = await ownerPage.request.post(`${API_BASE}/families/${familyId}/persons`, {
+        data: { first_name: '  Төмөр  ', last_name: '  Алт  ', gender: 'male', is_alive: true },
+      });
+      expect(personResp.status()).toBe(201);
+
+      // Invite and join helper member
+      const invResp = await ownerPage.request.post(`${API_BASE}/families/${familyId}/invitations`, {
+        data: { email: helperEmail, role: 'member' },
+      });
+      expect(invResp.status()).toBe(201);
+      const token = String((await invResp.json()).invite_url || '').split('#token=')[1] ?? '';
+
+      await registerVerifiedAndLogin(helperPage, {
+        email: helperEmail,
+        password,
+        displayName: 'Туслах Гишүүн',
+      });
+      expect(
+        (await helperPage.request.post(`${API_BASE}/invitations/accept`, { data: { token } })).status(),
+      ).toBe(200);
+
+      // 1. Open Admin Command Cockpit (/admin)
+      await ownerPage.goto(`/admin?family=${encodeURIComponent(familyId)}`);
+      await expect(ownerPage.getByRole('heading', { name: /Админы Ерөнхий Төв/ })).toBeVisible();
+      await expect(ownerPage.locator('body')).toContainText('Өгөгдлийн эрүүл мэнд');
+
+      // 2. Navigate to dedicated Admins & Roles page (/admin/admins)
+      await ownerPage.getByRole('link', { name: /Админ ба Эрх/ }).first().click();
+      await ownerPage.waitForURL(new RegExp(`/admin/admins\\?family=${familyId}`));
+
+      // Promote helper via preset & custom title
+      await ownerPage.getByRole('button', { name: /Өгөгдөл ба Мод шинэчлэгч/ }).click();
+      await ownerPage.getByPlaceholder(/Өгөгдөл ба Мод хариуцагч/).fill('Дата ба Түүхийн Туслах');
+      await ownerPage.getByRole('button', { name: /Туслах админаар томилох/ }).click();
+
+      await expect(ownerPage.locator('body')).toContainText('Дата ба Түүхийн Туслах');
+
+      // Open Edit Sub-Admin modal and demote back to member
+      await ownerPage.getByRole('button', { name: /Эрх & Үүрэг засах/ }).click();
+      const dialog = ownerPage.getByRole('dialog');
+      await expect(dialog).toBeVisible();
+      await dialog.locator('select').selectOption('member');
+      await dialog.getByRole('button', { name: /Хадгалах/ }).click();
+      await expect(dialog).toBeHidden();
+      await expect(ownerPage.getByRole('button', { name: /Эрх & Үүрэг засах/ })).toHaveCount(0);
+
+      // 3. Navigate to dedicated Data & Audit page (/admin/data) and run 1-click Data Refresh
+      await ownerPage.getByRole('link', { name: /Өгөгдөл ба Аудит/ }).first().click();
+      await ownerPage.waitForURL(new RegExp(`/admin/data\\?family=${familyId}`));
+      await ownerPage.getByRole('button', { name: /Өгөгдөл шинэчлэх/ }).click();
+      await expect(ownerPage.locator('body')).toContainText('Сүүлд шинэчилсэн:');
+    } finally {
+      await ownerCtx.close();
+      await helperCtx.close();
+    }
   });
 });

@@ -58,7 +58,63 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export type User = { id: string; email: string | null; display_name: string; person_id: string | null };
-export type Family = { id: string; name: string; description: string | null; role: string; created_at?: string };
+export type Family = {
+  id: string;
+  name: string;
+  description: string | null;
+  role: string;
+  created_at?: string;
+  permissions?: string[];
+  admin_title?: string | null;
+};
+export type FamilyMemberItem = {
+  user_id: string;
+  display_name: string;
+  role: string;
+  person_id?: string | null;
+  email?: string | null;
+  permissions?: string[];
+  admin_title?: string | null;
+  joined_at?: string | null;
+};
+export type FamilyAdminOverview = {
+  family_id: string;
+  family_name: string;
+  my_role: string;
+  my_admin_title?: string | null;
+  my_permissions: string[];
+  total_persons: number;
+  living_count: number;
+  deceased_count: number;
+  generation_depth: number;
+  marriage_count: number;
+  parent_child_count: number;
+  total_stories: number;
+  total_memories: number;
+  total_archives: number;
+  lineages_count: number;
+  member_count: number;
+  owner_count: number;
+  admin_count: number;
+  editor_count: number;
+  regular_member_count: number;
+  pending_invitations_count: number;
+  unlinked_members_count: number;
+  trash_count: number;
+  missing_birth_date_count: number;
+  missing_gender_count: number;
+  isolated_persons_count: number;
+  active_funds_count: number;
+  upcoming_events_count: number;
+  confirmed_income_minor: number;
+  total_expenses_minor: number;
+  net_balance_minor: number;
+};
+export type AdminDataRefreshResult = {
+  refreshed_persons: number;
+  pruned_trash: number;
+  refreshed_at: string;
+};
 export type Person = {
   id: string;
   first_name: string;

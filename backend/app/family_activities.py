@@ -22,12 +22,20 @@ from app.models import (
     FundExpense,
     User,
 )
+from app.permissions import has_permission
 
 router = APIRouter(prefix="/families/{family_id}", tags=["family activities"])
 public_funds_router = APIRouter(prefix="/public/funds", tags=["public family funds"])
 
 
-def _member(db: Session, family_id: UUID, user: User, roles: set[str] | None = None) -> str:
+def _member_record(
+    db: Session,
+    family_id: UUID,
+    user: User,
+    roles: set[str] | None = None,
+    *,
+    permission: str | None = None,
+) -> FamilyMember:
     family = db.get(Family, family_id)
     membership = db.scalar(
         select(FamilyMember).where(
@@ -37,9 +45,32 @@ def _member(db: Session, family_id: UUID, user: User, roles: set[str] | None = N
     )
     if family is None or family.archived_at is not None or membership is None:
         raise HTTPException(status_code=404, detail="Гэр бүлийн орчин олдсонгүй.")
-    if roles and membership.role not in roles:
+    if permission is not None:
+        if not has_permission(membership, permission):
+            raise HTTPException(status_code=403, detail="Энэ үйлдэлд эрх хүрэхгүй.")
+    elif roles:
+        allowed_roles = roles | {"admin"} if roles == {"owner", "editor"} else roles
+        if membership.role not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Энэ үйлдэлд эрх хүрэхгүй.")
+    return membership
+
+
+def _member(
+    db: Session,
+    family_id: UUID,
+    user: User,
+    roles: set[str] | None = None,
+    *,
+    permission: str | None = None,
+) -> str:
+    return _member_record(db, family_id, user, roles, permission=permission).role
+
+
+def _require_event_admin(db: Session, family_id: UUID, user: User) -> FamilyMember:
+    membership = _member_record(db, family_id, user)
+    if not (membership.role == "editor" or has_permission(membership, "manage_finance")):
         raise HTTPException(status_code=403, detail="Энэ үйлдэлд эрх хүрэхгүй.")
-    return membership.role
+    return membership
 
 
 def _audit(
@@ -370,9 +401,9 @@ def _registration_out(row: EventRegistration) -> RegistrationOut:
 def list_funds(
     family_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    role = _member(db, family_id, user)
+    membership = _member_record(db, family_id, user)
     query = select(FamilyFund).where(FamilyFund.family_id == family_id)
-    if role != "owner":
+    if not has_permission(membership, "manage_finance"):
         query = query.where(FamilyFund.is_active.is_(True))
     rows = db.scalars(query.order_by(FamilyFund.created_at.desc(), FamilyFund.id)).all()
     incomes, expenses = _fund_totals(db, [row.id for row in rows])
@@ -393,7 +424,7 @@ def create_fund(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    _member(db, family_id, user, permission="manage_finance")
     fund = FamilyFund(
         family_id=family_id,
         title=body.title.strip(),
@@ -418,7 +449,7 @@ def update_fund(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    _member(db, family_id, user, permission="manage_finance")
     fund = db.scalar(
         select(FamilyFund)
         .where(
@@ -451,7 +482,7 @@ def delete_fund(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    _member(db, family_id, user, permission="manage_finance")
     fund = db.scalar(
         select(FamilyFund)
         .where(
@@ -487,7 +518,7 @@ def set_fund_status(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    _member(db, family_id, user, permission="manage_finance")
     fund = db.scalar(
         select(FamilyFund).where(
             FamilyFund.id == fund_id,
@@ -565,7 +596,7 @@ def list_donations(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    role = _member(db, family_id, user)
+    membership = _member_record(db, family_id, user)
     if (
         db.scalar(
             select(FamilyFund.id).where(
@@ -584,7 +615,7 @@ def list_donations(
             Donation.fund_id == fund_id,
         )
     )
-    if role != "owner":
+    if not has_permission(membership, "manage_finance"):
         query = query.where(or_(Donation.donor_user_id == user.id, Donation.status == "confirmed"))
     rows = db.execute(query.order_by(Donation.created_at.desc(), Donation.id)).all()
     return [
@@ -648,7 +679,7 @@ def confirm_donation(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    _member(db, family_id, user, permission="manage_finance")
     row = db.scalar(
         select(Donation)
         .where(
@@ -743,7 +774,7 @@ def create_fund_expense(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    _member(db, family_id, user, permission="manage_finance")
     fund = db.scalar(
         select(FamilyFund).where(
             FamilyFund.id == fund_id,
@@ -787,7 +818,7 @@ def delete_fund_expense(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    _member(db, family_id, user, permission="manage_finance")
     expense = db.scalar(
         select(FundExpense).where(
             FundExpense.id == expense_id,
@@ -823,7 +854,7 @@ def create_event(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _require_event_admin(db, family_id, user)
     event = FamilyEvent(
         family_id=family_id,
         title=body.title.strip(),
@@ -853,7 +884,7 @@ def update_event(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _require_event_admin(db, family_id, user)
     event = db.scalar(
         select(FamilyEvent)
         .where(
@@ -929,7 +960,7 @@ def delete_event(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _require_event_admin(db, family_id, user)
     event = db.scalar(
         select(FamilyEvent)
         .where(
@@ -1053,7 +1084,7 @@ def list_registrations(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _require_event_admin(db, family_id, user)
     if (
         db.scalar(
             select(FamilyEvent.id).where(
@@ -1169,7 +1200,7 @@ def confirm_event_payment(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _require_event_admin(db, family_id, user)
     row = db.scalar(
         select(EventRegistration)
         .join(FamilyEvent)

@@ -28,7 +28,7 @@ from app.models import (
     User,
     UserPersonLink,
 )
-from app.permissions import _audit, _member
+from app.permissions import _audit, _member, has_permission
 
 router = APIRouter()
 logger = logging.getLogger("guulingiinhan.chat")
@@ -518,7 +518,7 @@ def delete_chat_message(
     if msg is None:
         raise HTTPException(status_code=404, detail="Зурвас олдсонгүй.")
 
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     if msg.sender_id != user.id and not is_admin:
         raise HTTPException(status_code=403, detail="Бусдын зурвасыг устгах эрхгүй.")
 

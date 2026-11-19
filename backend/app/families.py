@@ -57,13 +57,19 @@ from app.family_relationships import (
 )
 from app.family_relationships import router as family_relationships_router
 from app.identity import normalize_email
+from app.maintenance import prune_expired_trash
 from app.models import (
     Archive,
     AuditLog,
     Branch,
+    Donation,
     Family,
+    FamilyEvent,
+    FamilyFund,
     FamilyMember,
     FamilyPerson,
+    FamilyTrashRecord,
+    FundExpense,
     Invitation,
     Lineage,
     LoginIdentity,
@@ -77,12 +83,18 @@ from app.models import (
     UserPersonLink,
 )
 from app.permissions import (
+    DEFAULT_ADMIN_PERMISSIONS,
+    VALID_PERMISSION_SET,
     _assert_person_visible,
     _audit,
     _commit,
     _member,
     _person_in_family,
+    effective_permissions,
+    has_permission,
+    serialize_permissions,
 )
+from app.person_search import normalize_search_name
 from app.privacy import (
     active_guardian_scopes,
     person_is_minor,
@@ -124,6 +136,8 @@ class FamilyOut(BaseModel):
     description: str | None
     created_at: datetime
     role: str
+    permissions: list[str] = Field(default_factory=list)
+    admin_title: str | None = None
 
 
 class LineageCreate(BaseModel):
@@ -216,13 +230,33 @@ class FamilyStatsOut(BaseModel):
 
 class MemberRoleUpdate(BaseModel):
     role: str
+    permissions: list[str] | None = None
+    admin_title: str | None = Field(default=None, max_length=80)
 
     @field_validator("role")
     @classmethod
     def validate_role(cls, v: str) -> str:
-        if v not in {"owner", "editor", "member"}:
-            raise ValueError("Role must be 'owner', 'editor', or 'member'")
+        if v not in {"owner", "admin", "editor", "member"}:
+            raise ValueError("Role must be 'owner', 'admin', 'editor', or 'member'")
         return v
+
+    @field_validator("permissions")
+    @classmethod
+    def validate_permissions(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
+        invalid = [item for item in v if item not in VALID_PERMISSION_SET]
+        if invalid:
+            raise ValueError(f"Буруу админ эрх: {', '.join(invalid)}")
+        return v
+
+    @field_validator("admin_title")
+    @classmethod
+    def validate_admin_title(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        cleaned = v.strip()
+        return cleaned or None
 
 
 class TreeParentChildOut(BaseModel):
@@ -247,6 +281,50 @@ class MemberOut(BaseModel):
     display_name: str
     role: str
     person_id: UUID | None = None
+    email: str | None = None
+    permissions: list[str] = Field(default_factory=list)
+    admin_title: str | None = None
+    joined_at: datetime | None = None
+
+
+class FamilyAdminOverviewOut(BaseModel):
+    family_id: UUID
+    family_name: str
+    my_role: str
+    my_admin_title: str | None = None
+    my_permissions: list[str]
+    total_persons: int
+    living_count: int
+    deceased_count: int
+    generation_depth: int
+    marriage_count: int
+    parent_child_count: int
+    total_stories: int
+    total_memories: int
+    total_archives: int
+    lineages_count: int
+    member_count: int
+    owner_count: int
+    admin_count: int
+    editor_count: int
+    regular_member_count: int
+    pending_invitations_count: int
+    unlinked_members_count: int
+    trash_count: int
+    missing_birth_date_count: int
+    missing_gender_count: int
+    isolated_persons_count: int
+    active_funds_count: int
+    upcoming_events_count: int
+    confirmed_income_minor: int
+    total_expenses_minor: int
+    net_balance_minor: int
+
+
+class AdminDataRefreshOut(BaseModel):
+    refreshed_persons: int
+    pruned_trash: int
+    refreshed_at: datetime
 
 
 class MemberLinkPersonInput(BaseModel):
@@ -255,7 +333,7 @@ class MemberLinkPersonInput(BaseModel):
 
 class InvitationCreate(BaseModel):
     email: EmailStr
-    role: str = Field(pattern="^(editor|member)$")
+    role: str = Field(pattern="^(admin|editor|member)$")
 
 
 class InvitationOut(BaseModel):
@@ -306,22 +384,30 @@ def create_family(
         description=family.description,
         created_at=family.created_at,
         role=member.role,
+        permissions=effective_permissions(member),
+        admin_title=member.admin_title,
     )
 
 
 @router.get("", response_model=list[FamilyOut])
 def list_families(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = db.execute(
-        select(Family, FamilyMember.role)
+        select(Family, FamilyMember)
         .join(FamilyMember, FamilyMember.family_id == Family.id)
         .where(FamilyMember.user_id == user.id, Family.archived_at.is_(None))
         .order_by(Family.created_at)
     ).all()
     return [
         FamilyOut(
-            id=f.id, name=f.name, description=f.description, created_at=f.created_at, role=role
+            id=f.id,
+            name=f.name,
+            description=f.description,
+            created_at=f.created_at,
+            role=m.role,
+            permissions=effective_permissions(m),
+            admin_title=m.admin_title,
         )
-        for f, role in rows
+        for f, m in rows
     ]
 
 
@@ -336,6 +422,8 @@ def get_family(
         description=family.description,
         created_at=family.created_at,
         role=member.role,
+        permissions=effective_permissions(member),
+        admin_title=member.admin_title,
     )
 
 
@@ -346,7 +434,7 @@ def update_family(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    member, family = _member(db, family_id, user, {"owner", "editor"})
+    member, family = _member(db, family_id, user, permission="manage_settings")
     for key, value in body.model_dump(exclude_unset=True).items():
         setattr(family, key, value.strip() if key == "name" and value else value)
     _audit(db, user, family_id, "family.updated", "family", family.id)
@@ -358,6 +446,8 @@ def update_family(
         description=family.description,
         created_at=family.created_at,
         role=member.role,
+        permissions=effective_permissions(member),
+        admin_title=member.admin_title,
     )
 
 
@@ -376,9 +466,10 @@ def archive_family(
 def list_members(
     family_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    _member(db, family_id, user)
+    caller_member, _ = _member(db, family_id, user)
+    can_see_email = has_permission(caller_member, "manage_members")
     rows = db.execute(
-        select(User.id, User.display_name, FamilyMember.role, UserPersonLink.person_id)
+        select(User.id, User.display_name, User.email, FamilyMember, UserPersonLink.person_id)
         .join(FamilyMember, FamilyMember.user_id == User.id)
         .outerjoin(
             UserPersonLink,
@@ -390,16 +481,25 @@ def list_members(
             ),
         )
         .where(FamilyMember.family_id == family_id)
-        .order_by(FamilyMember.role, User.display_name)
     ).all()
+    role_order = {"owner": 0, "admin": 1, "editor": 2, "member": 3}
+    sorted_rows = sorted(
+        rows,
+        key=lambda r: (role_order.get(r[3].role, 9), (r.display_name or "").casefold()),
+    )
     return [
         MemberOut(
             user_id=r.id,
             display_name=r.display_name,
-            role=r.role,
-            person_id=r.person_id,
+            role=fm.role,
+            person_id=person_id,
+            email=r.email if can_see_email else None,
+            permissions=effective_permissions(fm),
+            admin_title=fm.admin_title,
+            joined_at=fm.joined_at,
         )
-        for r in rows
+        for r in sorted_rows
+        for fm, person_id in [(r[3], r[4])]
     ]
 
 
@@ -411,7 +511,7 @@ def update_member_role(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Admin endpoint: Family owner can change a member's role or transfer ownership."""
+    """Super-admin endpoint: owner can assign/configure sub-admin, change role, or transfer ownership."""
     current_membership, _ = _member(db, family_id, user, {"owner"})
     target_membership = db.scalar(
         select(FamilyMember).where(
@@ -427,11 +527,14 @@ def update_member_role(
         raise HTTPException(status_code=404, detail="Хэрэглэгч олдсонгүй.")
 
     if payload.role == "owner":
-        current_membership.role = "editor"
+        current_membership.role = "admin"
+        current_membership.permissions_json = serialize_permissions(list(DEFAULT_ADMIN_PERMISSIONS))
         target_membership.role = "owner"
+        target_membership.permissions_json = None
+        target_membership.admin_title = None
         _audit(db, user, family_id, "family.owner_transferred", "user", target_user_id)
     else:
-        if target_membership.role == "owner" and payload.role != "owner":
+        if target_membership.role == "owner":
             other_owner = db.scalar(
                 select(FamilyMember).where(
                     FamilyMember.family_id == family_id,
@@ -444,12 +547,48 @@ def update_member_role(
                     status_code=409,
                     detail="Гэр бүлийн цорын ганц эзэмшигчийн эрхийг бууруулах боломжгүй. Өөр хүнд эзэмшигчийн эрх шилжүүлнэ үү.",
                 )
-        target_membership.role = payload.role
-        _audit(db, user, family_id, "family_member.role_updated", "user", target_user_id)
 
+        if payload.role == "admin":
+            was_admin = target_membership.role == "admin"
+            target_membership.role = "admin"
+            if payload.permissions is not None:
+                target_membership.permissions_json = serialize_permissions(payload.permissions)
+            elif not was_admin:
+                target_membership.permissions_json = None
+            if "admin_title" in payload.model_fields_set:
+                target_membership.admin_title = payload.admin_title
+            _audit(
+                db,
+                user,
+                family_id,
+                "family_member.admin_updated" if was_admin else "family_member.admin_assigned",
+                "user",
+                target_user_id,
+            )
+        else:
+            target_membership.role = payload.role
+            target_membership.permissions_json = None
+            target_membership.admin_title = None
+            _audit(db, user, family_id, "family_member.role_updated", "user", target_user_id)
+
+    target_person_id = db.scalar(
+        select(UserPersonLink.person_id)
+        .join(FamilyPerson, FamilyPerson.person_id == UserPersonLink.person_id)
+        .where(
+            UserPersonLink.user_id == target_user_id,
+            FamilyPerson.family_id == family_id,
+        )
+    )
     db.commit()
     return MemberOut(
-        user_id=target_user.id, display_name=target_user.display_name, role=target_membership.role
+        user_id=target_user.id,
+        display_name=target_user.display_name,
+        role=target_membership.role,
+        person_id=target_person_id,
+        email=target_user.email,
+        permissions=effective_permissions(target_membership),
+        admin_title=target_membership.admin_title,
+        joined_at=target_membership.joined_at,
     )
 
 
@@ -463,9 +602,9 @@ def remove_member(
     """Admin endpoint: Remove a member from the family, or member leaves voluntarily."""
     is_self = user.id == target_user_id
     if not is_self:
-        _member(db, family_id, user, {"owner"})
+        caller_membership, _ = _member(db, family_id, user, permission="manage_members")
     else:
-        _member(db, family_id, user)
+        caller_membership, _ = _member(db, family_id, user)
 
     target_membership = db.scalar(
         select(FamilyMember).where(
@@ -475,6 +614,11 @@ def remove_member(
     )
     if not target_membership:
         raise HTTPException(status_code=404, detail="Гишүүн олдсонгүй.")
+
+    if not is_self and caller_membership.role != "owner" and target_membership.role in {"owner", "admin"}:
+        raise HTTPException(
+            status_code=403, detail="Зөвхөн ерөнхий админ өөр админыг хасах эрхтэй."
+        )
 
     if target_membership.role == "owner":
         owner_count = (
@@ -514,7 +658,9 @@ def link_member_person(
     db: Session = Depends(get_db),
 ):
     """Admin endpoint: link a family member account to a specific tree Person record."""
-    _member(db, family_id, user, {"owner", "editor"})
+    caller_member, _ = _member(db, family_id, user)
+    if not (has_permission(caller_member, "manage_members") or caller_member.role == "editor"):
+        raise HTTPException(status_code=403, detail="Энэ үйлдлийг хийх эрхгүй.")
     target_membership = db.scalar(
         select(FamilyMember).where(
             FamilyMember.family_id == family_id,
@@ -560,6 +706,10 @@ def link_member_person(
         display_name=target_user.display_name,
         role=target_membership.role,
         person_id=payload.person_id,
+        email=target_user.email if has_permission(caller_member, "manage_members") else None,
+        permissions=effective_permissions(target_membership),
+        admin_title=target_membership.admin_title,
+        joined_at=target_membership.joined_at,
     )
 
 
@@ -571,7 +721,9 @@ def unlink_member_person(
     db: Session = Depends(get_db),
 ):
     """Admin endpoint: unlink a family member account from their tree Person record."""
-    _member(db, family_id, user, {"owner", "editor"})
+    caller_member, _ = _member(db, family_id, user)
+    if not (has_permission(caller_member, "manage_members") or caller_member.role == "editor"):
+        raise HTTPException(status_code=403, detail="Энэ үйлдлийг хийх эрхгүй.")
     target_membership = db.scalar(
         select(FamilyMember).where(
             FamilyMember.family_id == family_id,
@@ -588,6 +740,34 @@ def unlink_member_person(
         db.commit()
 
     return Response(status_code=204)
+
+
+def _compute_generation_depth(
+    person_ids: list[UUID], parent_rows: list[tuple[UUID, UUID]]
+) -> int:
+    if not person_ids:
+        return 1
+    child_to_parents: dict[UUID, list[UUID]] = defaultdict(list)
+    parent_to_children: dict[UUID, list[UUID]] = defaultdict(list)
+    for p, c in parent_rows:
+        child_to_parents[c].append(p)
+        parent_to_children[p].append(c)
+
+    roots = [pid for pid in person_ids if pid not in child_to_parents]
+    if not roots:
+        return 1
+    max_depth = 1
+    queue: list[tuple[UUID, int]] = [(r, 1) for r in roots]
+    visited: set[UUID] = set()
+    while queue:
+        curr, depth = queue.pop(0)
+        max_depth = max(max_depth, depth)
+        if curr in visited:
+            continue
+        visited.add(curr)
+        for ch in parent_to_children.get(curr, []):
+            queue.append((ch, depth + 1))
+    return min(max_depth, 20)
 
 
 @router.get("/{family_id}/stats", response_model=FamilyStatsOut)
@@ -658,32 +838,16 @@ def get_family_stats(
             or 0
         )
 
-        parent_rows = db.execute(
-            select(ParentChildRelationship.parent_id, ParentChildRelationship.child_id).where(
-                ParentChildRelationship.parent_id.in_(person_ids),
-                ParentChildRelationship.child_id.in_(person_ids),
-            )
-        ).all()
-        child_to_parents: dict[UUID, list[UUID]] = defaultdict(list)
-        parent_to_children: dict[UUID, list[UUID]] = defaultdict(list)
-        for p, c in parent_rows:
-            child_to_parents[c].append(p)
-            parent_to_children[p].append(c)
-
-        roots = [pid for pid in person_ids if pid not in child_to_parents]
-        if roots:
-            max_depth = 1
-            queue: list[tuple[UUID, int]] = [(r, 1) for r in roots]
-            visited: set[UUID] = set()
-            while queue:
-                curr, depth = queue.pop(0)
-                max_depth = max(max_depth, depth)
-                if curr in visited:
-                    continue
-                visited.add(curr)
-                for ch in parent_to_children.get(curr, []):
-                    queue.append((ch, depth + 1))
-            generation_depth = min(max_depth, 20)
+        parent_rows = [
+            (p, c)
+            for p, c in db.execute(
+                select(ParentChildRelationship.parent_id, ParentChildRelationship.child_id).where(
+                    ParentChildRelationship.parent_id.in_(person_ids),
+                    ParentChildRelationship.child_id.in_(person_ids),
+                )
+            ).all()
+        ]
+        generation_depth = _compute_generation_depth(person_ids, parent_rows)
 
     total_stories = db.scalar(select(func.count(Story.id)).where(Story.family_id == family_id)) or 0
     total_archives = (
@@ -735,7 +899,7 @@ def create_lineage(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     lineage = Lineage(
         family_id=family_id,
         name=body.name.strip(),
@@ -779,7 +943,7 @@ def create_branch(
     db: Session = Depends(get_db),
 ):
     lineage = _lineage_in_member_family(db, lineage_id, user)
-    _member(db, lineage.family_id, user, {"owner", "editor"})
+    _member(db, lineage.family_id, user, permission="manage_people")
     branch = Branch(
         lineage_id=lineage.id,
         name=body.name.strip(),
@@ -836,7 +1000,7 @@ def upsert_person_lineage_assignment(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     person = _person_in_family(db, family_id, person_id)
     _assert_person_visible(db, person, user)
 
@@ -908,7 +1072,7 @@ def delete_person_lineage_assignment(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     person = _person_in_family(db, family_id, person_id)
     _assert_person_visible(db, person, user)
     assignment = db.scalar(
@@ -923,29 +1087,259 @@ def delete_person_lineage_assignment(
     return Response(status_code=204)
 
 
-@router.get("/{family_id}/audit")
-def family_audit(
+@router.get("/{family_id}/admin/overview", response_model=FamilyAdminOverviewOut)
+def get_family_admin_overview(
     family_id: UUID,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
-    entries = db.scalars(
-        select(AuditLog)
+    """Comprehensive admin cockpit overview: governance, tree health, finance, and activity counts."""
+    member, family = _member(db, family_id, user, {"owner", "admin", "editor"})
+    now = datetime.now(UTC)
+
+    person_ids = list(
+        db.scalars(select(FamilyPerson.person_id).where(FamilyPerson.family_id == family_id)).all()
+    )
+    total_persons = len(person_ids)
+    living_count = 0
+    deceased_count = 0
+    missing_birth_date_count = 0
+    missing_gender_count = 0
+    marriage_count = 0
+    parent_child_count = 0
+    generation_depth = 1
+    isolated_persons_count = 0
+
+    if total_persons > 0:
+        people_rows = db.execute(
+            select(Person.id, Person.is_alive, Person.birth_date, Person.gender).where(
+                Person.id.in_(person_ids)
+            )
+        ).all()
+        for _pid, is_alive, birth_date, gender in people_rows:
+            if is_alive:
+                living_count += 1
+            else:
+                deceased_count += 1
+            if birth_date is None:
+                missing_birth_date_count += 1
+            if gender not in {"male", "female"}:
+                missing_gender_count += 1
+
+        parent_rows = [
+            (p, c)
+            for p, c in db.execute(
+                select(ParentChildRelationship.parent_id, ParentChildRelationship.child_id).where(
+                    ParentChildRelationship.parent_id.in_(person_ids),
+                    ParentChildRelationship.child_id.in_(person_ids),
+                )
+            ).all()
+        ]
+        parent_child_count = len(parent_rows)
+        generation_depth = _compute_generation_depth(person_ids, parent_rows)
+
+        marriage_rows = db.execute(
+            select(Marriage.person_1_id, Marriage.person_2_id).where(
+                Marriage.deleted_at.is_(None),
+                Marriage.person_1_id.in_(person_ids),
+                Marriage.person_2_id.in_(person_ids),
+            )
+        ).all()
+        marriage_count = len(marriage_rows)
+
+        if total_persons > 1:
+            connected_ids = {endpoint for pair in parent_rows for endpoint in pair} | {
+                endpoint for pair in marriage_rows for endpoint in pair
+            }
+            isolated_persons_count = sum(1 for pid in person_ids if pid not in connected_ids)
+
+    member_rows = db.execute(
+        select(FamilyMember.user_id, FamilyMember.role).where(FamilyMember.family_id == family_id)
+    ).all()
+    owner_count = sum(1 for _, role in member_rows if role == "owner")
+    admin_count = sum(1 for _, role in member_rows if role == "admin")
+    editor_count = sum(1 for _, role in member_rows if role == "editor")
+    regular_member_count = sum(1 for _, role in member_rows if role == "member")
+
+    linked_user_ids = (
+        set(
+            db.scalars(
+                select(UserPersonLink.user_id).where(
+                    UserPersonLink.person_id.in_(person_ids),
+                )
+            ).all()
+        )
+        if person_ids
+        else set()
+    )
+    unlinked_members_count = sum(1 for uid, _ in member_rows if uid not in linked_user_ids)
+
+    pending_invitations_count = (
+        db.scalar(
+            select(func.count(Invitation.id)).where(
+                Invitation.family_id == family_id,
+                Invitation.accepted_at.is_(None),
+                Invitation.revoked_at.is_(None),
+                Invitation.expires_at > now,
+            )
+        )
+        or 0
+    )
+    total_stories = db.scalar(select(func.count(Story.id)).where(Story.family_id == family_id)) or 0
+    total_memories = (
+        db.scalar(select(func.count(Memory.id)).where(Memory.family_id == family_id)) or 0
+    )
+    total_archives = (
+        db.scalar(select(func.count(Archive.id)).where(Archive.family_id == family_id)) or 0
+    )
+    lineages_count = (
+        db.scalar(select(func.count(Lineage.id)).where(Lineage.family_id == family_id)) or 0
+    )
+    trash_count = (
+        db.scalar(
+            select(func.count(FamilyTrashRecord.id)).where(
+                FamilyTrashRecord.family_id == family_id
+            )
+        )
+        or 0
+    )
+    active_funds_count = (
+        db.scalar(
+            select(func.count(FamilyFund.id)).where(
+                FamilyFund.family_id == family_id,
+                FamilyFund.is_active.is_(True),
+            )
+        )
+        or 0
+    )
+    upcoming_events_count = (
+        db.scalar(
+            select(func.count(FamilyEvent.id)).where(
+                FamilyEvent.family_id == family_id,
+                FamilyEvent.starts_at >= now,
+            )
+        )
+        or 0
+    )
+    confirmed_income_minor = int(
+        db.scalar(
+            select(func.coalesce(func.sum(Donation.amount_minor), 0)).where(
+                Donation.family_id == family_id,
+                Donation.status == "confirmed",
+            )
+        )
+        or 0
+    )
+    total_expenses_minor = int(
+        db.scalar(
+            select(func.coalesce(func.sum(FundExpense.amount_minor), 0)).where(
+                FundExpense.family_id == family_id
+            )
+        )
+        or 0
+    )
+
+    return FamilyAdminOverviewOut(
+        family_id=family.id,
+        family_name=family.name,
+        my_role=member.role,
+        my_admin_title=member.admin_title,
+        my_permissions=effective_permissions(member),
+        total_persons=total_persons,
+        living_count=living_count,
+        deceased_count=deceased_count,
+        generation_depth=generation_depth,
+        marriage_count=marriage_count,
+        parent_child_count=parent_child_count,
+        total_stories=total_stories,
+        total_memories=total_memories,
+        total_archives=total_archives,
+        lineages_count=lineages_count,
+        member_count=len(member_rows),
+        owner_count=owner_count,
+        admin_count=admin_count,
+        editor_count=editor_count,
+        regular_member_count=regular_member_count,
+        pending_invitations_count=pending_invitations_count,
+        unlinked_members_count=unlinked_members_count,
+        trash_count=trash_count,
+        missing_birth_date_count=missing_birth_date_count,
+        missing_gender_count=missing_gender_count,
+        isolated_persons_count=isolated_persons_count,
+        active_funds_count=active_funds_count,
+        upcoming_events_count=upcoming_events_count,
+        confirmed_income_minor=confirmed_income_minor,
+        total_expenses_minor=total_expenses_minor,
+        net_balance_minor=confirmed_income_minor - total_expenses_minor,
+    )
+
+
+@router.post("/{family_id}/admin/reindex-data", response_model=AdminDataRefreshOut)
+def reindex_family_data(
+    family_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Normalize names, rebuild search prefixes, and prune expired trash records for this family."""
+    _member(db, family_id, user, permission="manage_data")
+    people = list(
+        db.scalars(
+            select(Person)
+            .join(FamilyPerson, FamilyPerson.person_id == Person.id)
+            .where(FamilyPerson.family_id == family_id)
+        ).all()
+    )
+    for person in people:
+        person.first_name = (person.first_name or "").strip() or person.first_name
+        person.last_name = (person.last_name or "").strip()
+        if person.middle_name is not None:
+            person.middle_name = person.middle_name.strip() or None
+        if person.nickname is not None:
+            person.nickname = person.nickname.strip() or None
+        person.search_first_name = normalize_search_name(person.first_name)
+        person.search_last_name = normalize_search_name(person.last_name)
+        person.search_middle_name = normalize_search_name(person.middle_name)
+
+    pruned_trash, _pruned_orphans = prune_expired_trash(
+        db,
+        family_id=family_id,
+        retention_days=get_settings().trash_retention_days,
+    )
+    _audit(db, user, family_id, "family.data_refreshed", "family", family_id)
+    db.commit()
+    return AdminDataRefreshOut(
+        refreshed_persons=len(people),
+        pruned_trash=pruned_trash,
+        refreshed_at=datetime.now(UTC),
+    )
+
+
+@router.get("/{family_id}/audit")
+def family_audit(
+    family_id: UUID,
+    limit: int = Query(default=100, ge=1, le=200),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _member(db, family_id, user, permission="view_audit")
+    rows = db.execute(
+        select(AuditLog, User.display_name)
+        .outerjoin(User, User.id == AuditLog.actor_id)
         .where(AuditLog.family_id == family_id)
         .order_by(AuditLog.created_at.desc())
-        .limit(100)
+        .limit(limit)
     ).all()
     return [
         {
             "id": entry.id,
             "actor_id": entry.actor_id,
+            "actor_name": actor_name,
             "action": entry.action,
             "target_type": entry.target_type,
             "target_id": entry.target_id,
             "created_at": entry.created_at,
         }
-        for entry in entries
+        for entry, actor_name in rows
     ]
 
 
@@ -955,8 +1349,8 @@ def list_pending_invitations(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return only pending invitations for an authorized family owner without exposing token material."""
-    _member(db, family_id, user, {"owner"})
+    """Return only pending invitations for an authorized family admin without exposing token material."""
+    _member(db, family_id, user, permission="manage_members")
     now = datetime.now(UTC)
     invitations = db.scalars(
         select(Invitation)
@@ -989,7 +1383,9 @@ def create_invitation(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    caller_member, _ = _member(db, family_id, user, permission="manage_members")
+    if body.role == "admin" and caller_member.role != "owner":
+        raise HTTPException(status_code=403, detail="Зөвхөн ерөнхий админ туслах админ урих эрхтэй.")
     email = normalize_email(str(body.email))
     if not _consume_otp_rate(db, "invitation-recipient", email, 5):
         raise HTTPException(
@@ -1083,7 +1479,7 @@ def revoke_invitation(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    _member(db, family_id, user, permission="manage_members")
     invitation = db.scalar(
         select(Invitation)
         .where(Invitation.id == invitation_id, Invitation.family_id == family_id)
@@ -1382,10 +1778,12 @@ router.include_router(family_content_router)
 router.include_router(family_data_router)
 
 __all__ = [
+    "AdminDataRefreshOut",
     "BiographyInput",
     "BranchCreate",
     "BranchOut",
     "ExtractedEventDraft",
+    "FamilyAdminOverviewOut",
     "FamilyCreate",
     "FamilyOut",
     "FamilyPatch",

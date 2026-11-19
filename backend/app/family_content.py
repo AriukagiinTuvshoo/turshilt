@@ -28,7 +28,14 @@ from app.models import (
     User,
     UserPersonLink,
 )
-from app.permissions import _assert_person_visible, _audit, _commit, _member, _person_in_family
+from app.permissions import (
+    _assert_person_visible,
+    _audit,
+    _commit,
+    _member,
+    _person_in_family,
+    has_permission,
+)
 from app.privacy import active_guardian_scopes, is_minor, person_is_minor, require_minor_scope
 from app.storage import ObjectStorage, get_storage
 
@@ -381,7 +388,7 @@ def create_archive(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_content")
     people = _validate_archive_people(db, family_id, body.person_ids, user)
     archive = Archive(
         family_id=family_id,
@@ -425,7 +432,7 @@ def update_archive(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_content")
     archive = db.scalar(
         select(Archive).where(Archive.id == archive_id, Archive.family_id == family_id)
     )
@@ -453,7 +460,7 @@ def delete_archive(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_content")
     archive = db.scalar(
         select(Archive).where(Archive.id == archive_id, Archive.family_id == family_id)
     )
@@ -545,7 +552,7 @@ def list_stories(
     db: Session = Depends(get_db),
 ):
     member, _ = _member(db, family_id, user)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     conditions = [
         Story.family_id == family_id,
         or_(Story.visibility != "private", Story.created_by == user.id),
@@ -619,7 +626,7 @@ def create_story(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_content")
     people = _validate_story_people(db, family_id, body.person_ids, user)
     story = Story(
         family_id=family_id,
@@ -663,7 +670,7 @@ def get_story(
     db: Session = Depends(get_db),
 ):
     member, _ = _member(db, family_id, user)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     story = db.scalar(select(Story).where(Story.id == story_id, Story.family_id == family_id))
     if story is None or not _story_visible(db, story, user):
         raise HTTPException(status_code=404, detail="Түүх олдсонгүй.")
@@ -701,7 +708,7 @@ def update_story(
     story = db.scalar(select(Story).where(Story.id == story_id, Story.family_id == family_id))
     if story is None or not _story_visible(db, story, user):
         raise HTTPException(status_code=404, detail="Түүх олдсонгүй.")
-    if member.role not in {"owner", "editor"} and story.created_by != user.id:
+    if not has_permission(member, "manage_content") and story.created_by != user.id:
         raise HTTPException(status_code=403, detail="Түүх засах эрхгүй.")
     updates = body.model_dump(exclude_unset=True, exclude={"person_ids"})
     if "title" in updates and updates["title"] is not None:
@@ -722,7 +729,7 @@ def update_story(
     _commit(db, "Ижил түүхийн холбоос давхар үүссэн байна.")
     story_people_out = _story_people(db, family_id, [story.id], user).get(story.id, [])
     author_name = db.scalar(select(User.display_name).where(User.id == story.created_by)) or "Нэргүй хэрэглэгч"
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     can_mutate = is_admin or (story.created_by == user.id)
     return StoryOut(
         id=story.id,
@@ -754,7 +761,7 @@ def delete_story(
     story = db.scalar(select(Story).where(Story.id == story_id, Story.family_id == family_id))
     if story is None or not _story_visible(db, story, user):
         raise HTTPException(status_code=404, detail="Түүх олдсонгүй.")
-    if member.role not in {"owner", "editor"} and story.created_by != user.id:
+    if not has_permission(member, "manage_content") and story.created_by != user.id:
         raise HTTPException(status_code=403, detail="Түүх устгах эрхгүй.")
     _audit(db, user, family_id, "story.deleted", "story", story.id)
     db.delete(story)
@@ -940,7 +947,7 @@ def list_person_memories(
 ):
     """Return the existing family Memory list contract scoped to one visible Person."""
     member, _ = _member(db, family_id, user)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     person = _person_in_family(db, family_id, person_id)
     _assert_person_visible(db, person, user)
     if person_is_minor(person):
@@ -1035,7 +1042,7 @@ def get_memory(
     db: Session = Depends(get_db),
 ):
     member, _ = _member(db, family_id, user)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     memory = db.scalar(select(Memory).where(Memory.id == memory_id, Memory.family_id == family_id))
     if memory is None or (memory.visibility == "private" and memory.created_by != user.id):
         raise HTTPException(status_code=404, detail="Дурсамж олдсонгүй.")
@@ -1137,7 +1144,7 @@ def update_memory(
         raise HTTPException(status_code=404, detail="Дурсамж олдсонгүй.")
     if memory.visibility == "private" and memory.created_by != user.id:
         raise HTTPException(status_code=404, detail="Дурсамж олдсонгүй.")
-    if member.role not in {"owner", "editor"} and memory.created_by != user.id:
+    if not has_permission(member, "manage_content") and memory.created_by != user.id:
         raise HTTPException(status_code=403, detail="Дурсамж засах эрхгүй.")
     existing_person_ids = list(
         db.scalars(
@@ -1176,7 +1183,7 @@ def delete_memory(
         raise HTTPException(status_code=404, detail="Дурсамж олдсонгүй.")
     if memory.visibility == "private" and memory.created_by != user.id:
         raise HTTPException(status_code=404, detail="Дурсамж олдсонгүй.")
-    if member.role not in {"owner", "editor"} and memory.created_by != user.id:
+    if not has_permission(member, "manage_content") and memory.created_by != user.id:
         raise HTTPException(status_code=403, detail="Дурсамж устгах эрхгүй.")
     tag_ids = list(
         db.scalars(
@@ -1258,7 +1265,7 @@ def list_memory_comments(
     db: Session = Depends(get_db),
 ):
     member, _ = _member(db, family_id, user)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     _assert_visible_memory_for_interaction(db, family_id, memory_id, user)
 
     rows = db.execute(
@@ -1298,7 +1305,7 @@ def create_memory_comment(
     db: Session = Depends(get_db),
 ):
     member, _ = _member(db, family_id, user)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     _assert_visible_memory_for_interaction(db, family_id, memory_id, user)
 
     if body.parent_comment_id is not None:
@@ -1350,7 +1357,7 @@ def update_memory_comment(
     db: Session = Depends(get_db),
 ):
     member, _ = _member(db, family_id, user)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     _assert_visible_memory_for_interaction(db, family_id, memory_id, user)
 
     comment = db.scalar(
@@ -1396,7 +1403,7 @@ def delete_memory_comment(
     db: Session = Depends(get_db),
 ):
     member, _ = _member(db, family_id, user)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_content")
     _assert_visible_memory_for_interaction(db, family_id, memory_id, user)
 
     comment = db.scalar(

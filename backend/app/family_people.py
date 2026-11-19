@@ -33,6 +33,7 @@ from app.permissions import (
     _commit,
     _member,
     _person_in_family,
+    has_permission,
 )
 from app.person_search import normalize_search_name
 from app.privacy import (
@@ -273,12 +274,12 @@ def _person_output(db: Session, family_id: UUID, person: Person, user: User) -> 
     scopes = active_guardian_scopes(db, user.id, family_id, [person.id]).get(person.id, set())
     result = PersonOut.model_validate(person)
 
-    member_role = db.scalar(
-        select(FamilyMember.role).where(
+    member = db.scalar(
+        select(FamilyMember).where(
             FamilyMember.family_id == family_id, FamilyMember.user_id == user.id
         )
     )
-    is_admin = member_role in {"owner", "editor"}
+    is_admin = member is not None and has_permission(member, "manage_people")
     is_creator = person.created_by == user.id
     linked_to_user = db.scalar(
         select(UserPersonLink.id).where(
@@ -309,7 +310,7 @@ def _require_minor_scope(
 
 def _can_edit_person(db: Session, family_id: UUID, person: Person, user: User) -> bool:
     member, _ = _member(db, family_id, user)
-    if member.role in {"owner", "editor"}:
+    if has_permission(member, "manage_people"):
         return True
     return (
         db.scalar(
@@ -437,7 +438,7 @@ def create_person(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     data = body.model_dump()
     data["first_name"] = body.first_name.strip()
     data["last_name"] = body.last_name.strip()
@@ -579,12 +580,12 @@ def list_people_directory(
         .limit(page_size)
     ).all()
 
-    member_role = db.scalar(
-        select(FamilyMember.role).where(
+    member = db.scalar(
+        select(FamilyMember).where(
             FamilyMember.family_id == family_id, FamilyMember.user_id == user.id
         )
     )
-    is_admin = member_role in {"owner", "editor"}
+    is_admin = member is not None and has_permission(member, "manage_people")
     own_linked_person_id = db.scalar(
         select(UserPersonLink.person_id).where(UserPersonLink.user_id == user.id)
     )
@@ -742,7 +743,7 @@ def update_person(
             UserPersonLink.user_id == user.id, UserPersonLink.person_id == person.id
         )
     )
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_people")
     is_self = linked_to_user is not None
     is_creator = person.created_by == user.id
     baseline_edit = is_admin or is_self or is_creator
@@ -972,7 +973,7 @@ def remove_person_from_family(
     """Detach from this family; preserve the person and relationship history."""
     member, _ = _member(db, family_id, user)
     person = _person_in_family(db, family_id, person_id)
-    is_admin = member.role in {"owner", "editor"}
+    is_admin = has_permission(member, "manage_people")
     is_creator = person.created_by == user.id
     if not (is_admin or is_creator):
         raise HTTPException(

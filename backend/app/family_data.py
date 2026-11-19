@@ -57,7 +57,7 @@ def list_family_trash(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_data")
 
     prune_expired_trash(
         db,
@@ -92,7 +92,7 @@ def restore_trash_person(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_data")
     trash = db.scalar(
         select(FamilyTrashRecord).where(
             FamilyTrashRecord.id == trash_id,
@@ -225,7 +225,7 @@ def purge_trash_person(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_data")
     trash = db.scalar(
         select(FamilyTrashRecord).where(
             FamilyTrashRecord.id == trash_id,
@@ -245,7 +245,7 @@ def empty_family_trash(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner"})
+    _member(db, family_id, user, permission="manage_data")
     records = db.scalars(
         select(FamilyTrashRecord).where(FamilyTrashRecord.family_id == family_id)
     ).all()
@@ -271,7 +271,7 @@ def export_family_backup_data(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _, family = _member(db, family_id, user, {"owner", "editor"})
+    _, family = _member(db, family_id, user, permission="manage_data")
 
     persons = list(
         db.scalars(
@@ -420,7 +420,7 @@ def import_family_backup_data(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_data")
 
     def _parse_iso_date(val: object) -> date | None:
         if not val:
@@ -627,7 +627,7 @@ def merge_duplicate_persons(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _member(db, family_id, user, {"owner", "editor"})
+    _member(db, family_id, user, permission="manage_people")
     if target_id == source_id:
         raise HTTPException(
             status_code=400, detail="Ижил хүнийг өөртэй нь нэгтгэх боломжгүй."

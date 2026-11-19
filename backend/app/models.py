@@ -147,7 +147,7 @@ class IdentityLinkRequest(Base):
 class Invitation(Base):
     __tablename__ = "invitations"
     __table_args__ = (
-        CheckConstraint("role IN ('editor', 'member')", name="ck_invitation_role"),
+        CheckConstraint("role IN ('admin', 'editor', 'member')", name="ck_invitation_role"),
         Index(
             "uq_invitation_active_family_email",
             "family_id",
@@ -347,7 +347,9 @@ class FamilyMember(Base):
     __tablename__ = "family_members"
     __table_args__ = (
         UniqueConstraint("family_id", "user_id", name="uq_family_member_user"),
-        CheckConstraint("role IN ('owner', 'editor', 'member')", name="ck_family_member_role"),
+        CheckConstraint(
+            "role IN ('owner', 'admin', 'editor', 'member')", name="ck_family_member_role"
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -356,6 +358,8 @@ class FamilyMember(Base):
     )
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(16), default="member")
+    admin_title: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    permissions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
