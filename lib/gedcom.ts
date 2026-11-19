@@ -258,11 +258,27 @@ export function parseGedcom(gedcomContent: string): {
   }>;
 } {
   const lines = gedcomContent.split(/\r?\n/);
-  const peopleMap = new Map<string, any>();
-  const famMap = new Map<string, { husb?: string; wife?: string; children: string[] }>();
+  type ParsedGedcomPerson = {
+    id: string;
+    first_name: string;
+    last_name: string;
+    gender: string;
+    is_alive: boolean;
+    birth_date: string | null;
+    birth_place: string | null;
+    death_date: string | null;
+  };
+  type ParsedGedcomFamily = {
+    id: string;
+    husb?: string;
+    wife?: string;
+    children: string[];
+  };
+  const peopleMap = new Map<string, ParsedGedcomPerson>();
+  const famMap = new Map<string, ParsedGedcomFamily>();
 
-  let currentEntity: any = null;
-  let currentContext = '';
+  let currentIndi: ParsedGedcomPerson | null = null;
+  let currentFam: ParsedGedcomFamily | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -280,7 +296,7 @@ export function parseGedcom(gedcomContent: string): {
         const xref = entityMatch[1];
         const type = entityMatch[2];
         if (type === 'INDI') {
-          currentEntity = {
+          currentIndi = {
             id: xref,
             first_name: '',
             last_name: '',
@@ -290,51 +306,49 @@ export function parseGedcom(gedcomContent: string): {
             birth_place: null,
             death_date: null,
           };
-          peopleMap.set(xref, currentEntity);
-          currentContext = 'INDI';
+          currentFam = null;
+          peopleMap.set(xref, currentIndi);
         } else if (type === 'FAM') {
-          currentEntity = {
+          currentFam = {
             id: xref,
             children: [],
           };
-          famMap.set(xref, currentEntity);
-          currentContext = 'FAM';
+          currentIndi = null;
+          famMap.set(xref, currentFam);
         } else {
-          currentEntity = null;
-          currentContext = '';
+          currentIndi = null;
+          currentFam = null;
         }
       } else {
-        currentEntity = null;
-        currentContext = '';
+        currentIndi = null;
+        currentFam = null;
       }
       continue;
     }
 
-    if (!currentEntity) continue;
-
-    if (currentContext === 'INDI') {
+    if (currentIndi) {
       if (level === 1 && rest.startsWith('NAME ')) {
         const rawName = rest.substring(5).trim();
         const parts = rawName.split('/');
-        currentEntity.first_name = (parts[0] || '').trim();
-        currentEntity.last_name = (parts[1] || '').trim();
-        if (!currentEntity.first_name && currentEntity.last_name) {
-          currentEntity.first_name = currentEntity.last_name;
-          currentEntity.last_name = '';
+        currentIndi.first_name = (parts[0] || '').trim();
+        currentIndi.last_name = (parts[1] || '').trim();
+        if (!currentIndi.first_name && currentIndi.last_name) {
+          currentIndi.first_name = currentIndi.last_name;
+          currentIndi.last_name = '';
         }
       } else if (level === 1 && rest.startsWith('SEX ')) {
         const s = rest.substring(4).trim().toUpperCase();
-        currentEntity.gender = s === 'F' ? 'female' : 'male';
+        currentIndi.gender = s === 'F' ? 'female' : 'male';
       } else if (level === 1 && rest.startsWith('DEAT')) {
-        currentEntity.is_alive = false;
+        currentIndi.is_alive = false;
       }
-    } else if (currentContext === 'FAM') {
+    } else if (currentFam) {
       if (level === 1 && rest.startsWith('HUSB ')) {
-        currentEntity.husb = rest.substring(5).trim();
+        currentFam.husb = rest.substring(5).trim();
       } else if (level === 1 && rest.startsWith('WIFE ')) {
-        currentEntity.wife = rest.substring(5).trim();
+        currentFam.wife = rest.substring(5).trim();
       } else if (level === 1 && rest.startsWith('CHIL ')) {
-        currentEntity.children.push(rest.substring(5).trim());
+        currentFam.children.push(rest.substring(5).trim());
       }
     }
   }

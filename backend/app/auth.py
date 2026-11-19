@@ -256,7 +256,6 @@ def _normalized_ip(request: Request) -> str:
 
 def _consume_otp_rate(db: Session, kind: str, value: str, limit: int) -> bool:
     now = datetime.now(UTC)
-    db.execute(delete(LoginThrottle).where(LoginThrottle.window_started < now - timedelta(days=7)))
     key = _otp_rate_key(kind, value)
     table = LoginThrottle.__table__
     dialect = db.get_bind().dialect.name
@@ -467,7 +466,6 @@ def _record_login_attempt(db: Session, email: str, ip: str) -> int:
     """Database-backed one-minute bucket, shared by all API workers."""
     now = datetime.now(UTC)
     key = hashlib.sha256(f"{email}\0{ip}".encode()).hexdigest()
-    db.execute(delete(LoginThrottle).where(LoginThrottle.window_started < now - timedelta(days=7)))
     table = LoginThrottle.__table__
     dialect = db.get_bind().dialect.name
     insert = pg_insert if dialect == "postgresql" else sqlite_insert

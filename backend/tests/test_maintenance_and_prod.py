@@ -27,6 +27,7 @@ from app.models import (
     Family,
     FamilyPerson,
     FamilyTrashRecord,
+    LoginThrottle,
     PasswordResetToken,
     Person,
     PhoneOtpChallenge,
@@ -259,7 +260,19 @@ def test_auth_artifacts_and_stale_photos_maintenance(database, tmp_path):
             status="pending",
             expires_at=now + timedelta(minutes=5),
         )
-        db.add_all([s_exp, s_act, ev_exp, ev_act, pr_exp, pr_act, otp_old, otp_recent])
+        lt_old = LoginThrottle(
+            key_hash="lt-old",
+            window_started=now - timedelta(days=8),
+            attempts=3,
+        )
+        lt_recent = LoginThrottle(
+            key_hash="lt-act",
+            window_started=now - timedelta(minutes=10),
+            attempts=1,
+        )
+        db.add_all(
+            [s_exp, s_act, ev_exp, ev_act, pr_exp, pr_act, otp_old, otp_recent, lt_old, lt_recent]
+        )
 
         # Photos: 1 deletion_pending, 1 abandoned uploading, 1 ready
         k_del = "families/test/del/original"
@@ -301,10 +314,12 @@ def test_auth_artifacts_and_stale_photos_maintenance(database, tmp_path):
         assert report.expired_email_tokens_pruned == 1
         assert report.expired_password_tokens_pruned == 1
         assert report.expired_otp_challenges_pruned == 1
+        assert report.expired_login_throttles_pruned == 1
         assert report.stale_photos_cleaned == 2
 
         assert len(db.scalars(select(UserSession)).all()) == 1
         assert len(db.scalars(select(PhoneOtpChallenge)).all()) == 1
+        assert len(db.scalars(select(LoginThrottle)).all()) == 1
         assert len(db.scalars(select(Photo)).all()) == 1
         assert not storage.exists(k_del)
         assert not storage.exists(k_del_thumb)

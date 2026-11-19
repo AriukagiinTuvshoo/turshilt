@@ -567,7 +567,11 @@ function PeoplePageContent() {
                   <span>Үе дамжлага</span>
                   <select
                     value={generationFilter}
-                    onChange={(e) => setGenerationFilter(e.target.value as any)}
+                    onChange={(e) =>
+                      setGenerationFilter(
+                        e.target.value as 'all' | 'ancestor' | 'parent' | 'current' | 'youth',
+                      )
+                    }
                   >
                     <option value="all">Бүх үе</option>
                     <option value="ancestor">👴 Өвөг дээдэс (&lt; 1960)</option>

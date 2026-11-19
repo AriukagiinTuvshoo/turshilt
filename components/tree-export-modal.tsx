@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, Printer, Copy, Check, X, Sparkles, Sliders, Shield, FileSpreadsheet } from 'lucide-react';
 import { Family, TreeData, TreePerson, personName } from '../lib/api';
 import { AdvancedTreeLayout } from '../lib/tree-layout';
@@ -275,6 +275,19 @@ export function TreeExportModal({
     return s;
   }, [family, tree, layout, exportTheme, frameStyle, includeCalligraphy, includeTamga]);
 
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  useEffect(() => {
+    if (!isOpen || !svgString) {
+      setPreviewUrl('');
+      return;
+    }
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [isOpen, svgString]);
+
   if (!isOpen) return null;
 
   const handleDownloadSvg = () => {
@@ -311,7 +324,7 @@ export function TreeExportModal({
 <!DOCTYPE html>
 <html>
   <head>
-    <title>${family?.name ?? 'Ургийн бичиг'} - Хэвлэх</title>
+    <title>${escapeXml(family?.name ?? 'Ургийн бичиг')} - Хэвлэх</title>
     <style>
       @page {
         size: landscape;
@@ -526,10 +539,15 @@ export function TreeExportModal({
             </div>
 
             <div className="tree-export-preview-frame">
-              <div
-                className="tree-export-svg-container"
-                dangerouslySetInnerHTML={{ __html: svgString }}
-              />
+              <div className="tree-export-svg-container">
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt={`${family?.name ?? 'Ургийн бичиг'} ургийн бичгийн загвар`}
+                    style={{ display: 'block', maxWidth: '100%', height: 'auto', margin: '0 auto' }}
+                  />
+                ) : null}
+              </div>
             </div>
           </main>
         </div>

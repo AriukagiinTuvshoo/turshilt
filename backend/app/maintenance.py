@@ -17,6 +17,7 @@ from app.models import (
     FamilyPerson,
     FamilyTrashRecord,
     LifeEvent,
+    LoginThrottle,
     Marriage,
     MemoryPersonTag,
     ParentChildRelationship,
@@ -46,6 +47,7 @@ class MaintenanceReport:
     expired_email_tokens_pruned: int = 0
     expired_password_tokens_pruned: int = 0
     expired_otp_challenges_pruned: int = 0
+    expired_login_throttles_pruned: int = 0
     stale_photos_cleaned: int = 0
 
     def to_dict(self) -> dict[str, int | bool]:
@@ -177,9 +179,27 @@ def prune_expired_auth_artifacts(
     dry_run: bool = False,
     now: datetime | None = None,
 ) -> dict[str, int]:
-    """Remove expired browser sessions, verification/reset tokens, and stale OTP records."""
+    """Remove expired browser sessions, verification/reset tokens, OTP records, and throttles."""
     ts = now or datetime.now(UTC)
     otp_cutoff = ts - timedelta(hours=24)
+    throttle_cutoff = ts - timedelta(days=7)
+
+    if dry_run:
+        throttles_pruned = int(
+            db.scalar(
+                select(func.count())
+                .select_from(LoginThrottle)
+                .where(LoginThrottle.window_started < throttle_cutoff)
+            )
+            or 0
+        )
+    else:
+        throttles_pruned = int(
+            db.execute(
+                delete(LoginThrottle).where(LoginThrottle.window_started < throttle_cutoff)
+            ).rowcount
+            or 0
+        )
 
     return {
         "expired_sessions_pruned": _prune_model_before(db, UserSession, ts, dry_run=dry_run),
@@ -192,6 +212,7 @@ def prune_expired_auth_artifacts(
         "expired_otp_challenges_pruned": _prune_model_before(
             db, PhoneOtpChallenge, otp_cutoff, dry_run=dry_run
         ),
+        "expired_login_throttles_pruned": throttles_pruned,
     }
 
 
@@ -285,6 +306,7 @@ def run_maintenance(
         expired_email_tokens_pruned=auth_counts["expired_email_tokens_pruned"],
         expired_password_tokens_pruned=auth_counts["expired_password_tokens_pruned"],
         expired_otp_challenges_pruned=auth_counts["expired_otp_challenges_pruned"],
+        expired_login_throttles_pruned=auth_counts["expired_login_throttles_pruned"],
         stale_photos_cleaned=photos_cleaned,
     )
     logger.info(

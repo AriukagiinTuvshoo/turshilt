@@ -828,7 +828,7 @@ function AdminContent() {
     try {
       setActionBusy(true);
       setError('');
-      const backupData = await api<any>(`/families/${selectedFamilyId}/export`);
+      const backupData = await api<Record<string, unknown>>(`/families/${selectedFamilyId}/export`);
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

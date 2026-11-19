@@ -144,21 +144,46 @@ export default function Tree3DScene({
     resize.observe(host);
 
     let frame = 0;
+    let dampingTicks = 0;
+    const lastCamPos = new THREE.Vector3();
+    const lastCamQuat = new THREE.Quaternion();
     const render = () => {
       frame = 0;
+      lastCamPos.copy(camera.position);
+      lastCamQuat.copy(camera.quaternion);
       controls.update();
       renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
+      const moved =
+        camera.position.distanceToSquared(lastCamPos) > 1e-6 ||
+        1 - Math.abs(camera.quaternion.dot(lastCamQuat)) > 1e-6;
+      if (moved && dampingTicks < 90) {
+        dampingTicks += 1;
+        frame = window.requestAnimationFrame(render);
+      } else {
+        dampingTicks = 0;
+      }
     };
     const invalidate = () => {
+      dampingTicks = 0;
       if (!frame) frame = window.requestAnimationFrame(render);
     };
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
+      setWebglError(true);
+    };
+    renderer.domElement.addEventListener('webglcontextlost', handleContextLost);
     controls.addEventListener('change', invalidate);
     invalidate();
 
     return () => {
       window.cancelAnimationFrame(frame);
       resize.disconnect();
+      renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
       controls.removeEventListener('change', invalidate);
       controls.dispose();
       scene.traverse((object) => {
