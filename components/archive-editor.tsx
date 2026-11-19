@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError, api, Archive, Family, PersonSearchPage } from '../lib/api';
+import { ConfirmDialog } from './confirm-dialog';
 
 type SelectedPerson = { id: string; name: string };
 
@@ -121,12 +122,22 @@ function ArchiveEditorContent({ mode }: { mode: 'create' | 'edit' }) {
     markDirty();
   }
 
-  function cancel() {
-    if (dirty && !window.confirm('Хадгалаагүй өөрчлөлт байна. Гарах уу?')) return;
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  function executeCancel() {
+    setShowCancelConfirm(false);
     window.location.href =
       mode === 'edit'
         ? '/archives/' + archiveId + '?family=' + encodeURIComponent(familyId)
         : '/archives?family=' + encodeURIComponent(familyId);
+  }
+
+  function cancel() {
+    if (dirty) {
+      setShowCancelConfirm(true);
+      return;
+    }
+    executeCancel();
   }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
@@ -398,6 +409,15 @@ function ArchiveEditorContent({ mode }: { mode: 'create' | 'edit' }) {
           </div>
         </form>
       </section>
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        title="Хадгалаагүй өөрчлөлт"
+        message="Та хадгалаагүй өөрчлөлтөө орхин гарахдаа итгэлтэй байна уу?"
+        confirmLabel="Гарах"
+        variant="warning"
+        onConfirm={executeCancel}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
     </main>
   );
 }

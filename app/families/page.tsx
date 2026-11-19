@@ -22,6 +22,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { ApiError, api, Family, FamilyStats } from '../../lib/api';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 
 type Member = { user_id: string; display_name: string; role: string };
 type Invitation = { id: string; email: string; role: 'member' | 'editor'; expires_at: string; created_at: string; status: 'pending' };
@@ -179,22 +180,48 @@ function FamiliesContent() {
     }
   };
 
-  const removeMember = async (targetUserId: string, memberName: string) => {
-    if (!selectedFamilyId || !confirm(`Та "${memberName}" хэрэглэгчийг энэ гэр бүлээс хасахдаа итгэлтэй байна уу?`)) return;
-    setMutation('edit');
-    setError('');
-    setNotice('');
-    try {
-      await api<void>(`/families/${selectedFamilyId}/members/${targetUserId}`, {
-        method: 'DELETE',
-      });
-      setMembers((prev) => prev.filter((m) => m.user_id !== targetUserId));
-      setNotice(`"${memberName}" хэрэглэгчийг гэр бүлээс хаслаа.`);
-    } catch (cause) {
-      setDetailError(friendlyError(cause, 'Гишүүнийг хасаж чадсангүй.'));
-    } finally {
-      setMutation('');
-    }
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    variant: 'danger' | 'warning' | 'primary';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmLabel: 'Батлах',
+    variant: 'danger',
+    onConfirm: () => {},
+  });
+
+  const removeMember = (targetUserId: string, memberName: string) => {
+    if (!selectedFamilyId || mutation) return;
+    setConfirmState({
+      isOpen: true,
+      title: 'Гишүүнийг гэр бүлээс хасах',
+      message: `Та “${memberName}” хэрэглэгчийг энэ гэр бүлээс хасахдаа итгэлтэй байна уу?`,
+      confirmLabel: 'Хасах',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setMutation('edit');
+        setError('');
+        setNotice('');
+        try {
+          await api<void>(`/families/${selectedFamilyId}/members/${targetUserId}`, {
+            method: 'DELETE',
+          });
+          setMembers((prev) => prev.filter((m) => m.user_id !== targetUserId));
+          setNotice(`"${memberName}" хэрэглэгчийг гэр бүлээс хаслаа.`);
+        } catch (cause) {
+          setDetailError(friendlyError(cause, 'Гишүүнийг хасаж чадсангүй.'));
+        } finally {
+          setMutation('');
+        }
+      },
+    });
   };
 
   useEffect(() => {
@@ -256,38 +283,43 @@ function FamiliesContent() {
     }
   }
 
-  async function archiveFamily() {
+  function archiveFamily() {
     if (!selectedFamily || selectedFamily.role !== 'owner' || mutation) return;
-    if (
-      !window.confirm(
-        `“${selectedFamily.name}” гэр бүлийг архивлах уу? Энэ үйлдэл тухайн гэр бүлийг идэвхтэй жагсаалтаас гаргана.`,
-      )
-    )
-      return;
     const archivedId = selectedFamily.id;
-    setMutation('archive');
-    setDetailError('');
-    setNotice('');
-    try {
-      await api<void>(`/families/${archivedId}`, { method: 'DELETE' });
-      if (selectedFamilyRef.current !== archivedId) return;
-      const remaining = families.filter((f) => f.id !== archivedId);
-      setFamilies(remaining);
-      if (remaining.length) {
-        const next = remaining[0].id;
-        setSelectedFamilyId(next);
-        router.replace('/families?family=' + encodeURIComponent(next));
-        setNotice('Гэр бүл архивлагдлаа.');
-      } else {
-        setSelectedFamilyId('');
-        router.replace('/families');
-        setNotice('Гэр бүл архивлагдлаа. Танд одоогоор идэвхтэй гэр бүл алга.');
-      }
-    } catch (cause) {
-      setDetailError(friendlyError(cause, 'Гэр бүлийг архивлаж чадсангүй.'));
-    } finally {
-      setMutation('');
-    }
+    const archivedName = selectedFamily.name;
+    setConfirmState({
+      isOpen: true,
+      title: 'Гэр бүлийг архивлах',
+      message: `“${archivedName}” гэр бүлийг архивлах уу? Энэ үйлдэл тухайн гэр бүлийг идэвхтэй жагсаалтаас гаргана.`,
+      confirmLabel: 'Архивлах',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setMutation('archive');
+        setDetailError('');
+        setNotice('');
+        try {
+          await api<void>(`/families/${archivedId}`, { method: 'DELETE' });
+          if (selectedFamilyRef.current !== archivedId) return;
+          const remaining = families.filter((f) => f.id !== archivedId);
+          setFamilies(remaining);
+          if (remaining.length) {
+            const next = remaining[0].id;
+            setSelectedFamilyId(next);
+            router.replace('/families?family=' + encodeURIComponent(next));
+            setNotice('Гэр бүл архивлагдлаа.');
+          } else {
+            setSelectedFamilyId('');
+            router.replace('/families');
+            setNotice('Гэр бүл архивлагдлаа. Танд одоогоор идэвхтэй гэр бүл алга.');
+          }
+        } catch (cause) {
+          setDetailError(friendlyError(cause, 'Гэр бүлийг архивлаж чадсангүй.'));
+        } finally {
+          setMutation('');
+        }
+      },
+    });
   }
 
   async function invite(event: FormEvent<HTMLFormElement>) {
@@ -324,25 +356,34 @@ function FamiliesContent() {
     }
   }
 
-  async function revokeInvitation(invitationId: string, email: string) {
+  function revokeInvitation(invitationId: string, email: string) {
     if (!selectedFamily || selectedFamily.role !== 'owner' || mutation) return;
-    if (!window.confirm(`“${email}” хаягийн урилгыг цуцлах уу?`)) return;
-    setMutation('revoke');
-    setDetailError('');
-    setNotice('');
     const familyId = selectedFamily.id;
-    try {
-      await api<void>(`/families/${familyId}/invitations/${invitationId}`, { method: 'DELETE' });
-      if (selectedFamilyRef.current !== familyId) return;
-      setNotice('Урилгыг цуцаллаа.');
-      await loadDetails(familyId);
-    } catch (cause) {
-      if (selectedFamilyRef.current === familyId) {
-        setDetailError(friendlyError(cause, 'Урилгыг цуцалж чадсангүй.'));
-      }
-    } finally {
-      setMutation('');
-    }
+    setConfirmState({
+      isOpen: true,
+      title: 'Урилга цуцлах',
+      message: `“${email}” хаяг руу илгээсэн урилгыг цуцлах уу?`,
+      confirmLabel: 'Урилга цуцлах',
+      variant: 'warning',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setMutation('revoke');
+        setDetailError('');
+        setNotice('');
+        try {
+          await api<void>(`/families/${familyId}/invitations/${invitationId}`, { method: 'DELETE' });
+          if (selectedFamilyRef.current !== familyId) return;
+          setNotice('Урилгыг цуцаллаа.');
+          await loadDetails(familyId);
+        } catch (cause) {
+          if (selectedFamilyRef.current === familyId) {
+            setDetailError(friendlyError(cause, 'Урилгыг цуцалж чадсангүй.'));
+          }
+        } finally {
+          setMutation('');
+        }
+      },
+    });
   }
 
   const isOwner = selectedFamily?.role === 'owner';
@@ -880,6 +921,16 @@ function FamiliesContent() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        variant={confirmState.variant}
+        busy={Boolean(mutation)}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

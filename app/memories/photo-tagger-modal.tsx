@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError, API_BASE, PersonSearchPage } from '../../lib/api';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 
 export type PhotoItem = {
   id: string;
@@ -146,8 +147,14 @@ export function PhotoTaggerModal({
     }
   }
 
-  async function handleDeletePhoto() {
-    if (!window.confirm('Та энэ зургийг бүр мөсөн устгахдаа итгэлтэй байна уу?')) return;
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  function handleDeletePhoto() {
+    setConfirmDeleteOpen(true);
+  }
+
+  async function confirmDeletePhoto() {
+    setConfirmDeleteOpen(false);
     setBusy(true);
     setError('');
     try {
@@ -339,6 +346,16 @@ export function PhotoTaggerModal({
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={confirmDeleteOpen}
+        title="Зургийг устгах"
+        message="Та энэ зургийг бүр мөсөн устгахдаа итгэлтэй байна уу?"
+        confirmLabel="Устгах"
+        variant="danger"
+        busy={busy}
+        onConfirm={() => void confirmDeletePhoto()}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }

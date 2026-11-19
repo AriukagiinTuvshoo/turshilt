@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api, Family, PersonSearchPage, Story } from '../lib/api';
 import { useParams, useSearchParams } from 'next/navigation';
+import { ConfirmDialog } from './confirm-dialog';
 
 type Props = {
   mode: 'create' | 'edit';
@@ -177,13 +178,23 @@ function StoryEditorContent({ mode, familyId: requestedFamilyId = '', storyId: r
     personSearchAbortRef.current?.abort();
   }, []);
 
-  function cancel() {
-    if (dirty && !window.confirm('Хадгалаагүй өөрчлөлт байна. Энэ хуудсыг орхих уу?')) return;
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  function executeCancel() {
+    setShowCancelConfirm(false);
     if (mode === 'create') {
       window.location.href = '/stories?family=' + encodeURIComponent(familyId);
     } else {
       window.location.href = '/stories/' + encodeURIComponent(story?.id || requestedStoryId) + '?family=' + encodeURIComponent(familyId);
     }
+  }
+
+  function cancel() {
+    if (dirty) {
+      setShowCancelConfirm(true);
+      return;
+    }
+    executeCancel();
   }
 
   function togglePerson(person: SelectedPerson) {
@@ -349,6 +360,15 @@ function StoryEditorContent({ mode, familyId: requestedFamilyId = '', storyId: r
           </div>
         </form>
       </section>
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        title="Хадгалаагүй өөрчлөлт"
+        message="Та хадгалаагүй өөрчлөлтөө орхин энэ хуудаснаас гарахдаа итгэлтэй байна уу?"
+        confirmLabel="Гарах"
+        variant="warning"
+        onConfirm={executeCancel}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
     </main>
   );
 }

@@ -17,6 +17,7 @@ import {
   personName,
   OralHistoryExtractOut,
 } from '../../lib/api';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 
 const EVENT_TYPE_MAP: Record<string, { label: string; icon: string }> = {
   birth: { label: 'Төрсөн', icon: '👶' },
@@ -417,24 +418,45 @@ function ProfilePageContent() {
     }
   }
 
-  async function handleDeletePerson() {
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    variant: 'danger' | 'warning' | 'primary';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmLabel: 'Батлах',
+    variant: 'danger',
+    onConfirm: () => {},
+  });
+
+  function handleDeletePerson() {
     if (!person || !family || !canDelete) return;
     const confirmName = personName(person) || 'энэ хүн';
-    const ok = window.confirm(
-      `Та "${confirmName}" хүнийг энэ гэр бүлийн модноос устгахдаа/салгахдаа итгэлтэй байна уу?`
-    );
-    if (!ok) return;
-
-    setMutationBusy(true);
-    setError('');
-    try {
-      await api(`/families/${family}/persons/${person.id}`, { method: 'DELETE' });
-      alert('Хүн гэр бүлийн модноос амжилттай салгагдлаа.');
-      router.push(`/people?family=${encodeURIComponent(family)}`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Хүнийг устгаж чадсангүй.');
-      setMutationBusy(false);
-    }
+    const personIdToDelete = person.id;
+    setConfirmState({
+      isOpen: true,
+      title: 'Хүнийг ургийн модноос салгах',
+      message: `Та “${confirmName}” хүнийг энэ гэр бүлийн модноос салгахдаа итгэлтэй байна уу? (Хогийн савнаас 30 хоногийн дотор сэргээх боломжтой)`,
+      confirmLabel: 'Салгах',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setMutationBusy(true);
+        setError('');
+        try {
+          await api(`/families/${family}/persons/${personIdToDelete}`, { method: 'DELETE' });
+          router.push(`/people?family=${encodeURIComponent(family)}`);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : 'Хүнийг устгаж чадсангүй.');
+          setMutationBusy(false);
+        }
+      },
+    });
   }
 
   async function handleExtractOral(e: FormEvent) {
@@ -475,19 +497,29 @@ function ProfilePageContent() {
     }
   }
 
-  async function handleDeleteEvent(eventId: string) {
-    if (!window.confirm('Та энэ үйл явдлыг устгахдаа итгэлтэй байна уу?') || !canDelete) return;
-    setMutationBusy(true);
-    setError('');
-    try {
-      await api(`/families/${family}/persons/${id}/events/${eventId}`, { method: 'DELETE' });
-      setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
-      setNotice('Үйл явдал устгагдлаа.');
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Үйл явдал устгаж чадсангүй.');
-    } finally {
-      setMutationBusy(false);
-    }
+  function handleDeleteEvent(eventId: string) {
+    if (!canDelete) return;
+    setConfirmState({
+      isOpen: true,
+      title: 'Үйл явдал устгах',
+      message: 'Та энэ амьдралын үйл явдлыг устгахдаа итгэлтэй байна уу?',
+      confirmLabel: 'Устгах',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setMutationBusy(true);
+        setError('');
+        try {
+          await api(`/families/${family}/persons/${id}/events/${eventId}`, { method: 'DELETE' });
+          setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
+          setNotice('Үйл явдал устгагдлаа.');
+        } catch (cause) {
+          setError(cause instanceof ApiError ? cause.message : 'Үйл явдал устгаж чадсангүй.');
+        } finally {
+          setMutationBusy(false);
+        }
+      },
+    });
   }
 
   if (loading) {
@@ -1084,6 +1116,16 @@ function ProfilePageContent() {
           <Link href={`/tree?family=${encodeURIComponent(family)}&person=${encodeURIComponent(person.id)}`}>Удмын модонд харах →</Link>
         </footer>
       </section>
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        variant={confirmState.variant}
+        busy={mutationBusy}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState((prev) => ({ ...prev, isOpen: false }))}
+      />
     </main>
   );
 }

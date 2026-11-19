@@ -6,6 +6,7 @@ import type { FormEvent } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { API_BASE, ApiError, api, Family, MemoryListItem } from '../../../lib/api';
 import { PhotoTaggerModal } from '../photo-tagger-modal';
+import { ConfirmDialog } from '../../../components/confirm-dialog';
 
 type MemoryPhoto = NonNullable<MemoryListItem['photos']>[number];
 type MemoryDetail = Omit<MemoryListItem, 'photos'> & {
@@ -250,8 +251,10 @@ function MemoryDetailPageContent() {
     setEditDirty(true);
   }
 
-  function cancelEdit() {
-    if (editDirty && !window.confirm('Хадгалаагүй өөрчлөлт байна. Гарах уу?')) return;
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  function executeCancelEdit() {
+    setShowCancelConfirm(false);
     personAbortRef.current?.abort();
     personRequestRef.current += 1;
     setEditing(false);
@@ -260,6 +263,14 @@ function MemoryDetailPageContent() {
     setPersonQuery('');
     setPersonResults(null);
     setEditDirty(false);
+  }
+
+  function cancelEdit() {
+    if (editDirty) {
+      setShowCancelConfirm(true);
+      return;
+    }
+    executeCancelEdit();
   }
 
   async function saveEdit(event: FormEvent<HTMLFormElement>) {
@@ -676,6 +687,15 @@ function MemoryDetailPageContent() {
           </section>
         </div>
       )}
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        title="Хадгалаагүй өөрчлөлт"
+        message="Та хадгалаагүй өөрчлөлтөө орхин гарахдаа итгэлтэй байна уу?"
+        confirmLabel="Гарах"
+        variant="warning"
+        onConfirm={executeCancelEdit}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
     </main>
   );
 }
