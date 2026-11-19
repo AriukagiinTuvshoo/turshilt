@@ -106,7 +106,7 @@ export function KinshipCalculatorModal({
         position: 'fixed',
         inset: 0,
         zIndex: 9999,
-        background: 'rgba(10, 25, 18, 0.75)',
+        background: 'var(--ui-backdrop)',
         backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
@@ -117,7 +117,8 @@ export function KinshipCalculatorModal({
     >
       <div
         style={{
-          background: '#ffffff',
+          background: 'var(--ui-surface)',
+          color: 'var(--ui-text)',
           borderRadius: '20px',
           maxWidth: '780px',
           width: '100%',
@@ -125,16 +126,16 @@ export function KinshipCalculatorModal({
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
-          border: '1px solid var(--parchment-border, #e2d9c8)',
+          boxShadow: 'var(--ui-shadow-modal)',
+          border: '1px solid var(--ui-border)',
         }}
       >
         {/* Header */}
         <div
           style={{
             padding: '18px 24px',
-            borderBottom: '1px solid var(--parchment-border, #e2d9c8)',
-            background: 'var(--ink-primary, #17372b)',
+            borderBottom: '1px solid var(--ui-border)',
+            background: '#17372b',
             color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
@@ -208,17 +209,7 @@ export function KinshipCalculatorModal({
         {/* Body Content */}
         <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '22px' }}>
           {people.length < 2 && (
-            <div
-              style={{
-                padding: '16px 20px',
-                borderRadius: '12px',
-                background: '#fffbeb',
-                border: '1px solid #fde68a',
-                color: '#92400e',
-                fontSize: '13.5px',
-                lineHeight: 1.5,
-              }}
-            >
+            <div className="ui-callout ui-callout--warning">
               Ураг төрлийн хамаарал тооцоолохын тулд ургийн модонд дор хаяж 2 хүн бүртгэлтэй байх шаардлагатай.
             </div>
           )}
@@ -229,29 +220,21 @@ export function KinshipCalculatorModal({
               gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
               gap: '16px',
               padding: '16px',
-              background: 'var(--parchment-card, #fbf9f4)',
+              background: 'var(--ui-surface-subtle)',
               borderRadius: '14px',
-              border: '1px solid var(--parchment-border, #e2d9c8)',
+              border: '1px solid var(--ui-border)',
             }}
           >
             {/* Person A (Subject) */}
             <div>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: 'var(--ink-primary, #17372b)', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: 'var(--ui-text)', marginBottom: '6px' }}>
                 1. Үндсэн хүн (Би):
               </label>
               <select
                 value={personAId}
                 onChange={(e) => setPersonAId(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  fontSize: '13.5px',
-                  fontWeight: 600,
-                  outline: 'none',
-                }}
+                className="ui-select"
+                style={{ fontSize: '13.5px', fontWeight: 600 }}
               >
                 {filteredPeopleA.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -263,22 +246,14 @@ export function KinshipCalculatorModal({
 
             {/* Person B (Target) */}
             <div>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: 'var(--ink-primary, #17372b)', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: 'var(--ui-text)', marginBottom: '6px' }}>
                 2. Харьцуулах хүн (Хамаатан):
               </label>
               <select
                 value={personBId}
                 onChange={(e) => setPersonBId(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  fontSize: '13.5px',
-                  fontWeight: 600,
-                  outline: 'none',
-                }}
+                className="ui-select"
+                style={{ fontSize: '13.5px', fontWeight: 600 }}
               >
                 {filteredPeopleB.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -294,22 +269,22 @@ export function KinshipCalculatorModal({
             <div
               style={{
                 borderRadius: '16px',
-                border: '1.5px solid var(--parchment-border, #e2d9c8)',
-                background: '#ffffff',
+                border: '1.5px solid var(--ui-border)',
+                background: 'var(--ui-surface-subtle)',
                 overflow: 'hidden',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+                boxShadow: 'var(--ui-shadow-sm)',
               }}
             >
               {/* Highlight Result Header */}
               <div
                 style={{
                   padding: '24px',
-                  background: 'linear-gradient(135deg, rgba(23, 55, 43, 0.04), rgba(180, 83, 9, 0.06))',
-                  borderBottom: '1px solid var(--parchment-border, #e2d9c8)',
+                  background: 'var(--ui-accent-soft)',
+                  borderBottom: '1px solid var(--ui-border)',
                   textAlign: 'center',
                 }}
               >
-                <div style={{ fontSize: '13px', color: 'var(--ink-secondary, #485c53)', marginBottom: '6px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--ui-text-secondary)', marginBottom: '6px' }}>
                   {personA.first_name}-ийн хувьд <strong>{personB.first_name}</strong> нь:
                 </div>
 
@@ -317,7 +292,7 @@ export function KinshipCalculatorModal({
                   style={{
                     fontSize: '28px',
                     fontWeight: 800,
-                    color: 'var(--ink-primary, #17372b)',
+                    color: 'var(--ui-text)',
                     letterSpacing: '-0.3px',
                     margin: '6px 0',
                   }}
@@ -325,7 +300,7 @@ export function KinshipCalculatorModal({
                   {kinshipResult.relationshipName}
                 </div>
 
-                <div style={{ fontSize: '13.5px', color: '#b45309', fontWeight: 600, marginTop: '4px' }}>
+                <div style={{ fontSize: '13.5px', color: 'var(--ui-accent-text)', fontWeight: 600, marginTop: '4px' }}>
                   {kinshipResult.pathDescription}
                 </div>
               </div>
@@ -340,22 +315,22 @@ export function KinshipCalculatorModal({
                     gap: '12px',
                     padding: '14px 16px',
                     borderRadius: '10px',
-                    background: kinshipResult.nineGenerationsRuleViolated ? '#fffbeb' : '#f0fdf4',
-                    border: kinshipResult.nineGenerationsRuleViolated ? '1px solid #fde68a' : '1px solid #bbf7d0',
+                    background: kinshipResult.nineGenerationsRuleViolated ? 'var(--ui-warning-bg)' : 'var(--ui-success-bg)',
+                    border: kinshipResult.nineGenerationsRuleViolated ? '1px solid var(--ui-warning-border)' : '1px solid var(--ui-success-border)',
                   }}
                 >
                   {kinshipResult.nineGenerationsRuleViolated ? (
-                    <AlertTriangle size={20} color="#b45309" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <AlertTriangle size={20} style={{ color: 'var(--ui-warning-text)', flexShrink: 0, marginTop: '2px' }} />
                   ) : (
-                    <CheckCircle2 size={20} color="#15803d" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <CheckCircle2 size={20} style={{ color: 'var(--ui-success-text)', flexShrink: 0, marginTop: '2px' }} />
                   )}
                   <div>
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: kinshipResult.nineGenerationsRuleViolated ? '#92400e' : '#166534' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: kinshipResult.nineGenerationsRuleViolated ? 'var(--ui-warning-text)' : 'var(--ui-success-text)' }}>
                       {kinshipResult.nineGenerationsRuleViolated
                         ? 'Есөн үе доторх язгуур төрөл (Цус холихыг цээрлэнэ)'
                         : 'Есөн үеэс алсарсан буюу шууд цусан холбоогүй'}
                     </div>
-                    <div style={{ fontSize: '12.5px', color: '#4b5563', marginTop: '3px', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: '12.5px', color: 'var(--ui-text-secondary)', marginTop: '3px', lineHeight: 1.5 }}>
                       {kinshipResult.culturalAdvice}
                     </div>
                   </div>
@@ -367,8 +342,9 @@ export function KinshipCalculatorModal({
                     display: 'flex',
                     gap: '10px',
                     fontSize: '12.5px',
-                    color: '#64748b',
-                    background: '#f8fafc',
+                    color: 'var(--ui-text-muted)',
+                    background: 'var(--ui-surface)',
+                    border: '1px solid var(--ui-border)',
                     padding: '12px 14px',
                     borderRadius: '8px',
                     lineHeight: 1.5,
@@ -388,8 +364,8 @@ export function KinshipCalculatorModal({
         <div
           style={{
             padding: '14px 24px',
-            borderTop: '1px solid var(--parchment-border, #e2d9c8)',
-            background: '#faf8f4',
+            borderTop: '1px solid var(--ui-border)',
+            background: 'var(--ui-surface-subtle)',
             display: 'flex',
             justifyContent: 'flex-end',
           }}
@@ -400,7 +376,7 @@ export function KinshipCalculatorModal({
             style={{
               padding: '8px 20px',
               borderRadius: '8px',
-              background: 'var(--ink-primary, #17372b)',
+              background: '#17372b',
               color: '#ffffff',
               border: 'none',
               fontWeight: 600,

@@ -199,7 +199,7 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
             gap: '10px',
             padding: '12px 20px',
             borderRadius: '30px',
-            background: 'var(--ink-primary, #17372b)',
+            background: '#17372b',
             color: '#ffffff',
             border: '1.5px solid rgba(255, 255, 255, 0.25)',
             boxShadow: '0 8px 24px rgba(23, 55, 43, 0.35)',
@@ -235,7 +235,7 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  border: '2px solid var(--ink-primary, #17372b)',
+                  border: '2px solid #17372b',
                 }}
               >
                 {unreadCount > 9 ? '9+' : unreadCount}
@@ -257,10 +257,11 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
             maxWidth: 'calc(100vw - 32px)',
             height: '560px',
             maxHeight: 'calc(100vh - 48px)',
-            background: 'var(--surface-canvas, #ffffff)',
+            background: 'var(--ui-surface)',
+            color: 'var(--ui-text)',
             borderRadius: '20px',
-            boxShadow: '0 16px 40px rgba(15, 23, 42, 0.22), 0 2px 8px rgba(0, 0, 0, 0.08)',
-            border: '1px solid var(--parchment-border, #e2d9c8)',
+            boxShadow: 'var(--ui-shadow-modal)',
+            border: '1px solid var(--ui-border)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -272,7 +273,7 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
           <div
             style={{
               padding: '14px 18px',
-              background: 'var(--ink-primary, #17372b)',
+              background: '#17372b',
               color: '#ffffff',
               display: 'flex',
               alignItems: 'center',
@@ -356,8 +357,8 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
           <div
             style={{
               display: 'flex',
-              borderBottom: '1px solid var(--parchment-border, #e2d9c8)',
-              background: '#f8fafc',
+              borderBottom: '1px solid var(--ui-border)',
+              background: 'var(--ui-surface-subtle)',
             }}
           >
             <button
@@ -370,11 +371,11 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                 flex: 1,
                 padding: '9px 12px',
                 border: 'none',
-                borderBottom: activeTab === 'broadcast' ? '2.5px solid var(--ink-primary, #17372b)' : '2.5px solid transparent',
+                borderBottom: activeTab === 'broadcast' ? '2.5px solid var(--ui-accent-bright)' : '2.5px solid transparent',
                 background: 'none',
                 fontSize: '12.5px',
                 fontWeight: activeTab === 'broadcast' ? 700 : 500,
-                color: activeTab === 'broadcast' ? 'var(--ink-primary, #17372b)' : '#64748b',
+                color: activeTab === 'broadcast' ? 'var(--ui-text)' : 'var(--ui-text-muted)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -391,11 +392,11 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                 flex: 1,
                 padding: '9px 12px',
                 border: 'none',
-                borderBottom: activeTab === 'direct' ? '2.5px solid var(--ink-primary, #17372b)' : '2.5px solid transparent',
+                borderBottom: activeTab === 'direct' ? '2.5px solid var(--ui-accent-bright)' : '2.5px solid transparent',
                 background: 'none',
                 fontSize: '12.5px',
                 fontWeight: activeTab === 'direct' ? 700 : 500,
-                color: activeTab === 'direct' ? 'var(--ink-primary, #17372b)' : '#64748b',
+                color: activeTab === 'direct' ? 'var(--ui-text)' : 'var(--ui-text-muted)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -411,24 +412,18 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
           {activeTab === 'direct' && !selectedRecipient && (
             <div style={{ flex: 1, overflowY: 'auto', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ position: 'relative' }}>
-                <Search size={14} style={{ position: 'absolute', left: '10px', top: '9px', color: '#94a3b8' }} />
+                <Search size={14} style={{ position: 'absolute', left: '10px', top: '9px', color: 'var(--ui-text-muted)' }} />
                 <input
                   type="text"
                   placeholder="Гишүүн хайх…"
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '7px 10px 7px 30px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '12.5px',
-                    outline: 'none',
-                  }}
+                  className="ui-input"
+                  style={{ paddingLeft: '30px', fontSize: '12.5px' }}
                 />
               </div>
 
-              <div style={{ fontSize: '11.5px', color: '#64748b', margin: '4px 0 2px' }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--ui-text-muted)', margin: '4px 0 2px' }}>
                 Зурвас бичих хамаатан, гишүүнээ сонгоно уу:
               </div>
 
@@ -447,21 +442,13 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                       style={{
                         padding: '10px 12px',
                         borderRadius: '10px',
-                        background: '#ffffff',
-                        border: '1px solid #e2e8f0',
+                        background: 'var(--ui-surface-subtle)',
+                        border: '1px solid var(--ui-border)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#f1f5f9';
-                        e.currentTarget.style.borderColor = '#cbd5e1';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#ffffff';
-                        e.currentTarget.style.borderColor = '#e2e8f0';
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -470,8 +457,8 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                             width: '32px',
                             height: '32px',
                             borderRadius: '50%',
-                            background: '#e0f2fe',
-                            color: '#0284c7',
+                            background: 'var(--ui-info-bg)',
+                            color: 'var(--ui-info-text)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -482,11 +469,11 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                           {(m.person_name || m.display_name || '?')[0]}
                         </div>
                         <div>
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ui-text)' }}>
                             {m.person_name || m.display_name}
                           </div>
                           {m.person_name && m.person_name !== m.display_name && (
-                            <div style={{ fontSize: '10.5px', color: '#64748b' }}>{m.display_name}</div>
+                            <div style={{ fontSize: '10.5px', color: 'var(--ui-text-muted)' }}>{m.display_name}</div>
                           )}
                         </div>
                       </div>
@@ -495,8 +482,9 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                           fontSize: '10.5px',
                           padding: '2px 6px',
                           borderRadius: '4px',
-                          background: '#f1f5f9',
-                          color: '#475569',
+                          background: 'var(--ui-surface-elevated)',
+                          border: '1px solid var(--ui-border)',
+                          color: 'var(--ui-text-secondary)',
                           fontWeight: 500,
                         }}
                       >
@@ -518,13 +506,13 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '12px',
-                background: 'var(--surface-subtle, #fcfbfa)',
+                background: 'var(--ui-bg)',
               }}
             >
               {messages.length === 0 ? (
-                <div style={{ margin: 'auto', textAlign: 'center', color: '#94a3b8', padding: '24px 16px' }}>
+                <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--ui-text-muted)', padding: '24px 16px' }}>
                   <MessageCircle size={32} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
-                  <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600, color: '#64748b' }}>
+                  <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600, color: 'var(--ui-text)' }}>
                     {activeTab === 'broadcast' ? 'Гэр бүлийн яриа эхлээгүй байна' : 'Хувийн зурвас хараахан алга'}
                   </p>
                   <p style={{ margin: 0, fontSize: '11.5px' }}>
@@ -550,10 +538,10 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                     >
                       {!isMine && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', marginLeft: '4px' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 700, color: '#334155' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ui-text)' }}>
                             {msg.sender_name}
                           </span>
-                          <span style={{ fontSize: '9.5px', color: '#64748b', background: '#f1f5f9', padding: '1px 4px', borderRadius: '4px' }}>
+                          <span style={{ fontSize: '9.5px', color: 'var(--ui-text-secondary)', background: 'var(--ui-surface-subtle)', border: '1px solid var(--ui-border)', padding: '1px 4px', borderRadius: '4px' }}>
                             {roleLabel(msg.sender_role)}
                           </span>
                         </div>
@@ -564,10 +552,10 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                           maxWidth: '82%',
                           padding: '10px 14px',
                           borderRadius: isMine ? '16px 16px 3px 16px' : '16px 16px 16px 3px',
-                          background: isMine ? 'var(--ink-primary, #17372b)' : '#ffffff',
-                          color: isMine ? '#ffffff' : '#0f172a',
-                          border: isMine ? 'none' : '1px solid #e2e8f0',
-                          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                          background: isMine ? '#17372b' : 'var(--ui-surface)',
+                          color: isMine ? '#ffffff' : 'var(--ui-text)',
+                          border: isMine ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid var(--ui-border)',
+                          boxShadow: 'var(--ui-shadow-sm)',
                           fontSize: '13px',
                           lineHeight: 1.45,
                           wordBreak: 'break-word',
@@ -580,7 +568,7 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                       <span
                         style={{
                           fontSize: '10px',
-                          color: '#94a3b8',
+                          color: 'var(--ui-text-muted)',
                           marginTop: '3px',
                           marginRight: isMine ? '4px' : 0,
                           marginLeft: isMine ? 0 : '4px',
@@ -602,8 +590,8 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
               onSubmit={handleSendMessage}
               style={{
                 padding: '10px 12px',
-                borderTop: '1px solid var(--parchment-border, #e2d9c8)',
-                background: '#ffffff',
+                borderTop: '1px solid var(--ui-border)',
+                background: 'var(--ui-surface)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
@@ -624,10 +612,11 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                   flex: 1,
                   padding: '9px 12px',
                   borderRadius: '20px',
-                  border: '1px solid #cbd5e1',
+                  border: '1px solid var(--ui-input-border)',
                   fontSize: '13px',
                   outline: 'none',
-                  background: '#f8fafc',
+                  background: 'var(--ui-input-bg)',
+                  color: 'var(--ui-input-text)',
                 }}
               />
               <button
@@ -637,7 +626,7 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
                   width: '36px',
                   height: '36px',
                   borderRadius: '50%',
-                  background: !inputText.trim() || sending ? '#cbd5e1' : 'var(--ink-primary, #17372b)',
+                  background: !inputText.trim() || sending ? 'var(--ui-border-strong)' : '#17372b',
                   color: '#ffffff',
                   border: 'none',
                   display: 'flex',

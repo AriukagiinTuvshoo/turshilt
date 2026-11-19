@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError, api, Family } from '../../lib/api';
+import './activities.css';
 
 type Fund = {
   id: string;
@@ -83,84 +84,49 @@ function PublicFundsSection({
 }) {
   return (
     <section
-      style={{
-        marginTop: '28px',
-        padding: '22px',
-        borderRadius: '18px',
-        background: 'var(--parchment-card, #fffdf9)',
-        border: '1.5px solid var(--parchment-border, #e2d9c8)',
-      }}
+      className="activities-public-section"
       aria-labelledby="public-funds-heading"
     >
-      <div style={{ marginBottom: '16px' }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: '#b45309', letterSpacing: '0.06em' }}>
-          ГУУЛИНГИЙНХНЫ ӨВИЙН САН
-        </span>
-        <h2 id="public-funds-heading" style={{ margin: '4px 0', font: '700 20px Georgia, serif', color: '#17372b' }}>
+      <div className="activities-section-head">
+        <span className="activities-kicker">ГУУЛИНГИЙНХНЫ ӨВИЙН САН</span>
+        <h2 id="public-funds-heading" className="activities-section-title">
           Нийтийн нээлттэй сангууд
         </h2>
-        <p style={{ margin: 0, fontSize: '13px', color: '#57685e' }}>
+        <p className="activities-section-subtitle">
           Зөвхөн нийтэд ил тод хуваалцахаар сонгосон идэвхтэй гэр бүлийн сангууд.
         </p>
       </div>
 
       {error && (
-        <div className="error" role="alert" style={{ marginBottom: '12px' }}>
+        <div className="error activities-alert" role="alert">
           <span>{error}</span>
-          <button type="button" onClick={onRetry} style={{ marginLeft: '10px' }}>
+          <button type="button" onClick={onRetry} className="activities-retry-btn">
             Дахин оролдох
           </button>
         </div>
       )}
 
       {loading ? (
-        <p style={{ fontSize: '13px', color: '#64748b' }} role="status">
+        <p className="activities-status-msg" role="status">
           Нийтийн санг ачаалж байна…
         </p>
       ) : !rows.length ? (
-        <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
+        <p className="activities-status-msg">
           Одоогоор нийтэд хуваалцсан сан бүртгэгдээгүй байна.
         </p>
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '14px',
-          }}
-        >
+        <div className="activities-grid-public">
           {rows.map((fund) => (
-            <article
-              key={fund.id}
-              style={{
-                padding: '16px 18px',
-                borderRadius: '14px',
-                background: '#fcfaf5',
-                border: '1px solid #e2d9c8',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, color: '#b45309', marginBottom: '6px' }}>
+            <article key={fund.id} className="activities-public-card">
+              <div className="activities-public-meta">
                 <span>🌐 НИЙТЭД НЭЭЛТТЭЙ</span>
                 <span>{fund.family_name}</span>
               </div>
-              <h3 style={{ margin: '0 0 6px', fontSize: '16px', color: '#17372b' }}>{fund.title}</h3>
-              <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>
-                {fund.purpose}
-              </p>
-              <div
-                style={{
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  background: '#fffbeb',
-                  border: '1px solid #fde68a',
-                }}
-              >
-                <small style={{ fontSize: '10.5px', fontWeight: 700, color: '#92400e' }}>
-                  ШИЛЖҮҮЛГИЙН МЭДЭЭЛЭЛ
-                </small>
-                <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: '#78350f', whiteSpace: 'pre-wrap' }}>
-                  {fund.payment_instruction}
-                </p>
+              <h3 className="activities-card-title activities-card-title--sm">{fund.title}</h3>
+              <p className="activities-card-desc">{fund.purpose}</p>
+              <div className="activities-payment-box">
+                <small className="activities-payment-label">ШИЛЖҮҮЛГИЙН МЭДЭЭЛЭЛ</small>
+                <p className="activities-payment-text">{fund.payment_instruction}</p>
               </div>
             </article>
           ))}
@@ -375,7 +341,7 @@ function ActivitiesContent() {
     return (
       <main className="people-page">
         <section className="people-shell">
-          <header style={{ marginBottom: '20px' }}>
+          <header className="activities-empty-header">
             <p className="eyebrow">ГЭР БҮЛИЙН ХАМТЫН АМЬДРАЛ</p>
             <h1>Ургийн Сан ба Уулзалт</h1>
             <p className="people-lede">
@@ -448,29 +414,12 @@ function ActivitiesContent() {
         </header>
 
         {/* Section Switcher Tabs */}
-        <nav
-          aria-label="Сан ба уулзалтын хэсэг"
-          style={{
-            display: 'flex',
-            gap: '10px',
-            marginBottom: '20px',
-            flexWrap: 'wrap',
-          }}
-        >
+        <nav aria-label="Сан ба уулзалтын хэсэг" className="activities-tabs">
           <button
             type="button"
             aria-pressed={section === 'fund'}
             onClick={() => setSection('fund')}
-            style={{
-              padding: '10px 20px',
-              borderRadius: '12px',
-              border: section === 'fund' ? '2px solid #d97706' : '1.5px solid #e2d9c8',
-              background: section === 'fund' ? 'rgba(217, 119, 6, 0.12)' : '#ffffff',
-              color: section === 'fund' ? '#b45309' : '#17372b',
-              fontWeight: 700,
-              fontSize: '14px',
-              cursor: 'pointer',
-            }}
+            className={`activities-tab ${section === 'fund' ? 'is-active' : ''}`}
           >
             🏛️ Ургийн Сан ({funds.length})
           </button>
@@ -478,31 +427,22 @@ function ActivitiesContent() {
             type="button"
             aria-pressed={section === 'events'}
             onClick={() => setSection('events')}
-            style={{
-              padding: '10px 20px',
-              borderRadius: '12px',
-              border: section === 'events' ? '2px solid #d97706' : '1.5px solid #e2d9c8',
-              background: section === 'events' ? 'rgba(217, 119, 6, 0.12)' : '#ffffff',
-              color: section === 'events' ? '#b45309' : '#17372b',
-              fontWeight: 700,
-              fontSize: '14px',
-              cursor: 'pointer',
-            }}
+            className={`activities-tab ${section === 'events' ? 'is-active' : ''}`}
           >
             🏕️ Уулзалт & Арга хэмжээ ({events.length})
           </button>
         </nav>
 
         {error && (
-          <div className="error" role="alert" style={{ marginBottom: '16px' }}>
+          <div className="error activities-alert" role="alert">
             <span>{error}</span>
-            <button type="button" onClick={() => void reload()} style={{ marginLeft: '12px' }}>
+            <button type="button" onClick={() => void reload()} className="activities-retry-btn">
               Дахин оролдох
             </button>
           </div>
         )}
         {notice && (
-          <div className="success" role="status" style={{ marginBottom: '16px' }}>
+          <div className="success activities-alert" role="status">
             {notice}
           </div>
         )}
@@ -511,34 +451,20 @@ function ActivitiesContent() {
         {section === 'fund' && (
           <section>
             {owner && (
-              <form
-                onSubmit={(e) => void newFund(e)}
-                style={{
-                  padding: '20px',
-                  marginBottom: '24px',
-                  borderRadius: '16px',
-                  background: 'var(--parchment-card, #fffdf9)',
-                  border: '1.5px solid var(--parchment-border, #e2d9c8)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                }}
-              >
-                <h3 style={{ margin: 0, font: '700 18px Georgia, serif', color: '#17372b' }}>
-                  + Шинэ Ургийн Сан үүсгэх
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-                  <label style={{ fontSize: '12.5px', fontWeight: 600 }}>
+              <form onSubmit={(e) => void newFund(e)} className="activities-form-card">
+                <h3 className="activities-form-title">+ Шинэ Ургийн Сан үүсгэх</h3>
+                <div className="activities-form-grid">
+                  <label className="activities-field-label">
                     Сангийн нэр *
                     <input
                       name="title"
                       required
                       maxLength={180}
                       placeholder="Жишээ: Ургийн наадам 2026 сан"
-                      style={{ width: '100%', marginTop: '4px', padding: '8px 12px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                      className="activities-field-input"
                     />
                   </label>
-                  <label style={{ fontSize: '12.5px', fontWeight: 600 }}>
+                  <label className="activities-field-label">
                     Харагдах хүрээ
                     <select
                       name="visibility"
@@ -546,14 +472,14 @@ function ActivitiesContent() {
                       onChange={(e) =>
                         setFundVisibility(e.target.value === 'public' ? 'public' : 'family')
                       }
-                      style={{ width: '100%', marginTop: '4px', height: '38px', padding: '0 10px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                      className="activities-field-select"
                     >
                       <option value="family">Зөвхөн энэ гэр бүлийн гишүүдэд</option>
                       <option value="public">Нийтэд нээлттэй (Бүх нэвтэрсэн хэрэглэгчид)</option>
                     </select>
                   </label>
                 </div>
-                <label style={{ fontSize: '12.5px', fontWeight: 600 }}>
+                <label className="activities-field-label">
                   Зориулалт *
                   <textarea
                     name="purpose"
@@ -561,10 +487,10 @@ function ActivitiesContent() {
                     maxLength={4000}
                     rows={2}
                     placeholder="Сангийн зорилго, зарцуулалтын тайлбар…"
-                    style={{ width: '100%', marginTop: '4px', padding: '8px 12px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                    className="activities-field-textarea"
                   />
                 </label>
-                <label style={{ fontSize: '12.5px', fontWeight: 600 }}>
+                <label className="activities-field-label">
                   Дансны мэдээлэл / Гүйлгээний утгын заавар *
                   <textarea
                     name="instruction"
@@ -572,7 +498,7 @@ function ActivitiesContent() {
                     maxLength={4000}
                     rows={2}
                     placeholder="Жишээ: Хаан Банк 5000000000 (Нэр), Гүйлгээний утга: Өөрийн нэр, утас"
-                    style={{ width: '100%', marginTop: '4px', padding: '8px 12px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                    className="activities-field-textarea"
                   />
                 </label>
                 <div>
@@ -584,26 +510,11 @@ function ActivitiesContent() {
             )}
 
             {!funds.length ? (
-              <div
-                style={{
-                  padding: '32px',
-                  textAlign: 'center',
-                  borderRadius: '16px',
-                  background: '#fcfaf5',
-                  border: '1px dashed #d6cbb5',
-                  color: '#64748b',
-                }}
-              >
+              <div className="activities-empty-box">
                 Одоогоор ургийн сан бүртгэгдээгүй байна.
               </div>
             ) : (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-                  gap: '18px',
-                }}
-              >
+              <div className="activities-grid">
                 {funds.map((f) => {
                   const fundDonations = donations[f.id] ?? [];
                   const confirmedSumMinor = fundDonations
@@ -611,20 +522,9 @@ function ActivitiesContent() {
                     .reduce((acc, d) => acc + d.amount_minor, 0);
 
                   return (
-                    <article
-                      key={f.id}
-                      style={{
-                        padding: '20px',
-                        borderRadius: '16px',
-                        background: 'var(--parchment-card, #fffdf9)',
-                        border: '1.5px solid var(--parchment-border, #e2d9c8)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: f.is_active ? '#15803d' : '#64748b' }}>
+                    <article key={f.id} className="activities-card">
+                      <div className="activities-fund-head">
+                        <span className={`activities-fund-badge ${f.is_active ? 'is-active' : ''}`}>
                           {f.visibility === 'public' ? '🌐 НИЙТЭД НЭЭЛТТЭЙ' : '🏠 ГЭР БҮЛИЙН САН'} ·{' '}
                           {f.is_active ? '🟢 ИДЭВХТЭЙ' : '⏸️ ТҮР ЗОГССОН'}
                         </span>
@@ -641,7 +541,7 @@ function ActivitiesContent() {
                                 'Сангийн төлөв шинэчлэгдлээ.',
                               )
                             }
-                            style={{ fontSize: '11.5px', padding: '4px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer' }}
+                            className="activities-toggle-btn"
                           >
                             {f.is_active ? 'Түр зогсоох' : 'Идэвхжүүлэх'}
                           </button>
@@ -649,47 +549,26 @@ function ActivitiesContent() {
                       </div>
 
                       <div>
-                        <h3 style={{ margin: '0 0 6px', font: '700 19px Georgia, serif', color: '#17372b' }}>
-                          {f.title}
-                        </h3>
-                        <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: 1.55 }}>
+                        <h3 className="activities-card-title">{f.title}</h3>
+                        <p className="activities-card-desc activities-card-desc--compact">
                           {f.purpose}
                         </p>
                       </div>
 
-                      <div
-                        style={{
-                          padding: '12px 14px',
-                          borderRadius: '12px',
-                          background: 'rgba(16, 185, 129, 0.08)',
-                          border: '1px solid rgba(16, 185, 129, 0.25)',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#065f46' }}>
+                      <div className="activities-confirmed-box">
+                        <span className="activities-confirmed-label">
                           Баталгаажсан хуримтлал:
                         </span>
-                        <strong style={{ fontSize: '17px', color: '#047857' }}>
+                        <strong className="activities-confirmed-amount">
                           {money(confirmedSumMinor, f.currency)}
                         </strong>
                       </div>
 
-                      <div
-                        style={{
-                          padding: '12px 14px',
-                          borderRadius: '12px',
-                          background: '#fffbeb',
-                          border: '1px solid #fde68a',
-                        }}
-                      >
-                        <small style={{ fontSize: '10.5px', fontWeight: 700, color: '#92400e' }}>
+                      <div className="activities-payment-box">
+                        <small className="activities-payment-label">
                           ДАНС & ШИЛЖҮҮЛГИЙН МЭДЭЭЛЭЛ
                         </small>
-                        <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#78350f', whiteSpace: 'pre-wrap' }}>
-                          {f.payment_instruction}
-                        </p>
+                        <p className="activities-payment-text">{f.payment_instruction}</p>
                       </div>
 
                       {f.is_active && (
@@ -711,16 +590,7 @@ function ActivitiesContent() {
                             );
                             form.reset();
                           }}
-                          style={{
-                            padding: '12px',
-                            borderRadius: '12px',
-                            background: '#fcfaf5',
-                            border: '1px solid #e2d9c8',
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: '10px',
-                            alignItems: 'center',
-                          }}
+                          className="activities-subform"
                         >
                           <input
                             name="amount"
@@ -728,46 +598,37 @@ function ActivitiesContent() {
                             min="1"
                             required
                             placeholder="Хандивын дүн (₮)"
-                            style={{ flex: 1, minWidth: '140px', padding: '7px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                            className="activities-subform-input"
                           />
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                          <label className="activities-subform-checkbox">
                             <input name="private" type="checkbox" /> Нэрээ нууцлах
                           </label>
-                          <button type="submit" className="button primary" disabled={busy} style={{ fontSize: '12.5px', padding: '7px 14px' }}>
+                          <button type="submit" className="button primary activities-subform-btn" disabled={busy}>
                             Хандив бүртгэх
                           </button>
                         </form>
                       )}
 
-                      <div style={{ borderTop: '1px solid #e2d9c8', paddingTop: '10px' }}>
-                        <h4 style={{ margin: '0 0 8px', fontSize: '12.5px', color: '#475569' }}>
+                      <div className="activities-list-section">
+                        <h4 className="activities-list-heading">
                           Хандивын бүртгэл ({fundDonations.length})
                         </h4>
                         {fundDonations.length === 0 ? (
-                          <small style={{ color: '#94a3b8' }}>Одоогоор хандив бүртгэгдээгүй байна.</small>
+                          <small className="activities-list-empty">
+                            Одоогоор хандив бүртгэгдээгүй байна.
+                          </small>
                         ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div className="activities-list-stack">
                             {fundDonations.map((d) => (
-                              <div
-                                key={d.id}
-                                style={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  padding: '8px 10px',
-                                  borderRadius: '8px',
-                                  background: '#fcfaf5',
-                                  fontSize: '12.5px',
-                                }}
-                              >
+                              <div key={d.id} className="activities-ledger-row">
                                 <span>
                                   <strong>{d.private_donor ? 'Нууц хандивлагч' : d.donor_name ?? 'Гишүүн'}</strong>{' '}
                                   · {money(d.amount_minor, d.currency)} ·{' '}
-                                  <em style={{ fontStyle: 'normal', color: d.status === 'confirmed' ? '#15803d' : '#b45309' }}>
+                                  <em className={`activities-ledger-status ${d.status === 'confirmed' ? 'is-confirmed' : ''}`}>
                                     {statusLabel(d.status)}
                                   </em>
                                 </span>
-                                <div style={{ display: 'flex', gap: '6px' }}>
+                                <div className="activities-ledger-actions">
                                   {d.status === 'pledged' && (
                                     <button
                                       type="button"
@@ -781,7 +642,7 @@ function ActivitiesContent() {
                                           'Шилжүүлгийг мэдэгдлээ.',
                                         )
                                       }
-                                      style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #d97706', background: '#fffbeb', color: '#92400e', fontWeight: 700, cursor: 'pointer' }}
+                                      className="activities-btn-report"
                                     >
                                       Шилжүүлсэн гэж мэдэгдэх
                                     </button>
@@ -799,7 +660,7 @@ function ActivitiesContent() {
                                           'Хандив баталгаажлаа.',
                                         )
                                       }
-                                      style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '6px', border: 'none', background: '#16a34a', color: '#ffffff', fontWeight: 700, cursor: 'pointer' }}
+                                      className="activities-btn-confirm"
                                     >
                                       ✓ Батлах
                                     </button>
@@ -829,85 +690,64 @@ function ActivitiesContent() {
         {section === 'events' && (
           <section>
             {manage && (
-              <form
-                onSubmit={(e) => void newEvent(e)}
-                style={{
-                  padding: '20px',
-                  marginBottom: '24px',
-                  borderRadius: '16px',
-                  background: 'var(--parchment-card, #fffdf9)',
-                  border: '1.5px solid var(--parchment-border, #e2d9c8)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                }}
-              >
-                <h3 style={{ margin: 0, font: '700 18px Georgia, serif', color: '#17372b' }}>
-                  + Ургийн уулзалт, арга хэмжээ зарлах
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                  <label style={{ fontSize: '12.5px', fontWeight: 600 }}>
+              <form onSubmit={(e) => void newEvent(e)} className="activities-form-card">
+                <h3 className="activities-form-title">+ Ургийн уулзалт, арга хэмжээ зарлах</h3>
+                <div className="activities-form-grid activities-form-grid--events">
+                  <label className="activities-field-label">
                     Арга хэмжээний нэр *
                     <input
                       name="title"
                       required
                       maxLength={180}
                       placeholder="Жишээ: Гуулингийнхны ургийн баяр 2026"
-                      style={{ width: '100%', marginTop: '4px', padding: '8px 12px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                      className="activities-field-input"
                     />
                   </label>
-                  <label style={{ fontSize: '12.5px', fontWeight: 600 }}>
+                  <label className="activities-field-label">
                     Байршил / Газар *
                     <input
                       name="location"
                       required
                       maxLength={300}
                       placeholder="Жишээ: Тэрэлж амралтын газар"
-                      style={{ width: '100%', marginTop: '4px', padding: '8px 12px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                      className="activities-field-input"
                     />
                   </label>
-                  <label style={{ fontSize: '12.5px', fontWeight: 600 }}>
+                  <label className="activities-field-label">
                     Эхлэх өдөр, цаг *
                     <input
                       name="starts_at"
                       type="datetime-local"
                       required
                       defaultValue={localDate(30)}
-                      style={{ width: '100%', marginTop: '4px', padding: '8px 12px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                      className="activities-field-input"
                     />
                   </label>
                 </div>
 
-                <label style={{ fontSize: '12.5px', fontWeight: 600 }}>
+                <label className="activities-field-label">
                   Хөтөлбөр, дэлгэрэнгүй тайлбар
                   <textarea
                     name="description"
                     maxLength={12000}
                     rows={2}
                     placeholder="Уулзалтын хөтөлбөр, анхаарах зүйлс…"
-                    style={{ width: '100%', marginTop: '4px', padding: '8px 12px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                    className="activities-field-textarea"
                   />
                 </label>
 
-                <details style={{ fontSize: '12.5px' }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#b45309' }}>
+                <details className="activities-details">
+                  <summary className="activities-details-summary">
                     ⚙️ Бүртгэлийн хугацаа, суудлын тоо болон хураамжийн тохиргоо (заавал биш)
                   </summary>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                      gap: '12px',
-                      marginTop: '10px',
-                    }}
-                  >
+                  <div className="activities-form-grid activities-form-grid--compact">
                     <label>
                       Бүртгэл хаах хугацаа
                       <input
                         name="deadline"
                         type="datetime-local"
                         defaultValue={localDate(20)}
-                        style={{ width: '100%', marginTop: '4px', padding: '7px 10px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                        className="activities-field-input"
                       />
                     </label>
                     <label>
@@ -917,7 +757,7 @@ function ActivitiesContent() {
                         type="number"
                         min="1"
                         placeholder="Хязгааргүй"
-                        style={{ width: '100%', marginTop: '4px', padding: '7px 10px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                        className="activities-field-input"
                       />
                     </label>
                     <label>
@@ -927,7 +767,7 @@ function ActivitiesContent() {
                         type="number"
                         min="0"
                         defaultValue="0"
-                        style={{ width: '100%', marginTop: '4px', padding: '7px 10px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                        className="activities-field-input"
                       />
                     </label>
                     <label>
@@ -937,17 +777,17 @@ function ActivitiesContent() {
                         type="number"
                         min="0"
                         defaultValue="0"
-                        style={{ width: '100%', marginTop: '4px', padding: '7px 10px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                        className="activities-field-input"
                       />
                     </label>
                   </div>
-                  <label style={{ display: 'block', marginTop: '10px' }}>
+                  <label className="activities-field-label activities-field-label--block">
                     Төлбөр шилжүүлэх дансны заавар
                     <textarea
                       name="instruction"
                       maxLength={4000}
                       rows={2}
-                      style={{ width: '100%', marginTop: '4px', padding: '7px 10px', borderRadius: '8px', border: '1px solid #d6cbb5' }}
+                      className="activities-field-textarea"
                     />
                   </label>
                 </details>
@@ -961,26 +801,11 @@ function ActivitiesContent() {
             )}
 
             {!events.length ? (
-              <div
-                style={{
-                  padding: '32px',
-                  textAlign: 'center',
-                  borderRadius: '16px',
-                  background: '#fcfaf5',
-                  border: '1px dashed #d6cbb5',
-                  color: '#64748b',
-                }}
-              >
+              <div className="activities-empty-box">
                 Одоогоор ургийн уулзалт зарлаагүй байна.
               </div>
             ) : (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-                  gap: '18px',
-                }}
-              >
+              <div className="activities-grid">
                 {events.map((event) => {
                   const own = mine[event.id];
                   const total =
@@ -989,36 +814,25 @@ function ActivitiesContent() {
                   const eventRegs = registrations[event.id] ?? [];
 
                   return (
-                    <article
-                      key={event.id}
-                      style={{
-                        padding: '20px',
-                        borderRadius: '16px',
-                        background: 'var(--parchment-card, #fffdf9)',
-                        border: '1.5px solid var(--parchment-border, #e2d9c8)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px',
-                      }}
-                    >
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#b45309' }}>
+                    <article key={event.id} className="activities-card">
+                      <span className="activities-event-date">
                         📅 {new Date(event.starts_at).toLocaleString('mn-MN')}
                       </span>
-                      <h3 style={{ margin: 0, font: '700 19px Georgia, serif', color: '#17372b' }}>
+                      <h3 className="activities-card-title activities-card-desc--compact">
                         {event.title}
                       </h3>
                       {event.description && (
-                        <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: 1.55 }}>
+                        <p className="activities-card-desc activities-card-desc--compact">
                           {event.description}
                         </p>
                       )}
-                      <p style={{ margin: 0, fontSize: '13px', color: '#1e293b' }}>
+                      <p className="activities-event-location">
                         <strong>📍 Байршил:</strong> {event.location}
                         {event.capacity ? ` · ${event.capacity} суудал` : ''}
                       </p>
 
                       {(event.adult_fee_minor || event.child_fee_minor) > 0 && (
-                        <p style={{ margin: 0, fontSize: '12.5px', color: '#475569' }}>
+                        <p className="activities-event-fee">
                           <strong>Хураамж:</strong> Том хүн{' '}
                           {money(event.adult_fee_minor, event.currency)}, Хүүхэд{' '}
                           {money(event.child_fee_minor, event.currency)}
@@ -1026,20 +840,11 @@ function ActivitiesContent() {
                       )}
 
                       {event.payment_instruction && (
-                        <div
-                          style={{
-                            padding: '10px 12px',
-                            borderRadius: '10px',
-                            background: '#fffbeb',
-                            border: '1px solid #fde68a',
-                          }}
-                        >
-                          <small style={{ fontSize: '10.5px', fontWeight: 700, color: '#92400e' }}>
+                        <div className="activities-payment-box">
+                          <small className="activities-payment-label">
                             ШИЛЖҮҮЛГИЙН МЭДЭЭЛЭЛ
                           </small>
-                          <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: '#78350f', whiteSpace: 'pre-wrap' }}>
-                            {event.payment_instruction}
-                          </p>
+                          <p className="activities-payment-text">{event.payment_instruction}</p>
                         </div>
                       )}
 
@@ -1060,35 +865,26 @@ function ActivitiesContent() {
                               'Уулзалтад оролцохоор амжилттай бүртгүүллээ!',
                             );
                           }}
-                          style={{
-                            padding: '12px',
-                            borderRadius: '12px',
-                            background: '#fcfaf5',
-                            border: '1px solid #e2d9c8',
-                            display: 'flex',
-                            gap: '10px',
-                            flexWrap: 'wrap',
-                            alignItems: 'flex-end',
-                          }}
+                          className="activities-subform activities-subform--rsvp"
                         >
-                          <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                          <label className="activities-field-label">
                             Том хүн
                             <input
                               name="adults"
                               type="number"
                               min="0"
                               defaultValue="1"
-                              style={{ width: '70px', display: 'block', marginTop: '4px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                              className="activities-num-input"
                             />
                           </label>
-                          <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                          <label className="activities-field-label">
                             Хүүхэд
                             <input
                               name="children"
                               type="number"
                               min="0"
                               defaultValue="0"
-                              style={{ width: '70px', display: 'block', marginTop: '4px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                              className="activities-num-input"
                             />
                           </label>
                           <button type="submit" className="button primary" disabled={busy}>
@@ -1098,25 +894,16 @@ function ActivitiesContent() {
                       )}
 
                       {own && own.status === 'registered' && (
-                        <div
-                          style={{
-                            padding: '12px 14px',
-                            borderRadius: '12px',
-                            background: '#f0fdf4',
-                            border: '1px solid #bbf7d0',
-                            fontSize: '13px',
-                            color: '#166534',
-                          }}
-                        >
+                        <div className="activities-rsvp-confirmed">
                           <strong>✅ Таны ирцийн бүртгэл:</strong> {own.adult_count} том хүн,{' '}
                           {own.child_count} хүүхэд
                           {total > 0 && (
-                            <p style={{ margin: '4px 0 8px' }}>
+                            <p className="activities-rsvp-fee">
                               Нийт хураамж: <strong>{money(total, event.currency)}</strong> ·{' '}
                               {statusLabel(own.payment_status)}
                             </p>
                           )}
-                          <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                          <div className="activities-rsvp-actions">
                             {total > 0 && own.payment_status === 'unpaid' && (
                               <button
                                 type="button"
@@ -1158,24 +945,13 @@ function ActivitiesContent() {
                       )}
 
                       {manage && eventRegs.length > 0 && (
-                        <div style={{ borderTop: '1px solid #e2d9c8', paddingTop: '10px' }}>
-                          <h4 style={{ margin: '0 0 8px', fontSize: '12.5px', color: '#475569' }}>
+                        <div className="activities-list-section">
+                          <h4 className="activities-list-heading">
                             Бүртгүүлсэн оролцогчид ({eventRegs.length})
                           </h4>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div className="activities-list-stack">
                             {eventRegs.map((r) => (
-                              <div
-                                key={r.id}
-                                style={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  padding: '6px 10px',
-                                  borderRadius: '8px',
-                                  background: '#fcfaf5',
-                                  fontSize: '12px',
-                                }}
-                              >
+                              <div key={r.id} className="activities-ledger-row">
                                 <span>
                                   {r.adult_count} том хүн · {r.child_count} хүүхэд ·{' '}
                                   {statusLabel(r.payment_status)}
@@ -1194,7 +970,7 @@ function ActivitiesContent() {
                                         'Төлбөр баталгаажлаа.',
                                       )
                                     }
-                                    style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', border: 'none', background: '#16a34a', color: '#ffffff', fontWeight: 700, cursor: 'pointer' }}
+                                    className="activities-btn-confirm"
                                   >
                                     ✓ Батлах
                                   </button>

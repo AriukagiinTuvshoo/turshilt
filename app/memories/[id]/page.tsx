@@ -555,9 +555,9 @@ function MemoryDetailPageContent() {
                 gap: '7px',
                 padding: '8px 16px',
                 borderRadius: '999px',
-                border: memory.liked_by_me ? '2px solid #e11d48' : '1.5px solid #cbd5e1',
-                background: memory.liked_by_me ? 'rgba(225, 29, 72, 0.12)' : '#ffffff',
-                color: memory.liked_by_me ? '#be123c' : '#334155',
+                border: memory.liked_by_me ? '2px solid #e11d48' : '1.5px solid var(--ui-border-strong)',
+                background: memory.liked_by_me ? 'rgba(225, 29, 72, 0.14)' : 'var(--ui-surface)',
+                color: memory.liked_by_me ? '#e11d48' : 'var(--ui-text)',
                 fontSize: '13.5px',
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -571,8 +571,8 @@ function MemoryDetailPageContent() {
                 style={{
                   padding: '2px 8px',
                   borderRadius: '999px',
-                  background: memory.liked_by_me ? '#e11d48' : '#f1f5f9',
-                  color: memory.liked_by_me ? '#ffffff' : '#475569',
+                  background: memory.liked_by_me ? '#e11d48' : 'var(--ui-surface-subtle)',
+                  color: memory.liked_by_me ? '#ffffff' : 'var(--ui-text-secondary)',
                   fontSize: '11.5px',
                 }}
               >
@@ -587,7 +587,7 @@ function MemoryDetailPageContent() {
                 )}
               </>
             ) : (
-              <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '6px 12px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ui-text-muted)', background: 'var(--ui-surface-subtle)', padding: '6px 12px', borderRadius: '12px', border: '1px solid var(--ui-border)' }}>
                 🔒 Зөвхөн харах эрхтэй
               </span>
             )}
@@ -830,7 +830,7 @@ function MemoryDetailPageContent() {
 
           <form onSubmit={handleAddComment} style={{ marginBottom: '20px' }}>
             {replyParentId && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', marginBottom: '8px', borderRadius: '8px', background: '#fef3c7', color: '#92400e', fontSize: '12px' }}>
+              <div className="ui-callout ui-callout--warning" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', marginBottom: '8px', borderRadius: '8px', fontSize: '12px' }}>
                 <span>
                   ↩️{' '}
                   <strong>
@@ -841,7 +841,7 @@ function MemoryDetailPageContent() {
                 <button
                   type="button"
                   onClick={() => setReplyParentId(null)}
-                  style={{ border: 'none', background: 'transparent', color: '#92400e', fontWeight: 700, cursor: 'pointer' }}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--ui-warning-text)', fontWeight: 700, cursor: 'pointer' }}
                 >
                   ✕ Цуцлах
                 </button>
@@ -855,16 +855,8 @@ function MemoryDetailPageContent() {
                 maxLength={2000}
                 placeholder="Энэ дурсамжийн тухай сэтгэгдэл, дулаан үгээ үлдээгээрэй…"
                 disabled={commentBusy}
-                style={{
-                  flex: 1,
-                  minWidth: '240px',
-                  height: '42px',
-                  padding: '0 14px',
-                  borderRadius: '10px',
-                  border: '1.5px solid #d6cbb5',
-                  fontSize: '13.5px',
-                  background: '#ffffff',
-                }}
+                className="ui-input"
+                style={{ flex: 1, minWidth: '240px', height: '42px', padding: '0 14px', fontSize: '13.5px' }}
               />
               <button
                 type="submit"
@@ -890,16 +882,16 @@ function MemoryDetailPageContent() {
                       style={{
                         padding: '14px 16px',
                         borderRadius: '12px',
-                        background: '#fcfaf5',
-                        border: '1px solid #e2d9c8',
+                        background: 'var(--ui-surface-subtle)',
+                        border: '1px solid var(--ui-border)',
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                         <div>
-                          <strong style={{ fontSize: '13.5px', color: '#17372b' }}>
+                          <strong style={{ fontSize: '13.5px', color: 'var(--ui-text)' }}>
                             {rootComment.author_name}
                           </strong>
-                          <small style={{ fontSize: '11.5px', color: '#64748b', marginLeft: '8px' }}>
+                          <small style={{ fontSize: '11.5px', color: 'var(--ui-text-muted)', marginLeft: '8px' }}>
                             {formatCreatedAt(rootComment.created_at)}
                           </small>
                         </div>
@@ -907,7 +899,7 @@ function MemoryDetailPageContent() {
                           <button
                             type="button"
                             onClick={() => setReplyParentId(rootComment.id)}
-                            style={{ border: 'none', background: 'transparent', color: '#b45309', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer' }}
+                            style={{ border: 'none', background: 'transparent', color: 'var(--ui-accent)', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer' }}
                           >
                             ↩️ Хариулах
                           </button>
@@ -918,7 +910,7 @@ function MemoryDetailPageContent() {
                                 setEditingCommentId(rootComment.id);
                                 setEditingCommentBody(rootComment.body);
                               }}
-                              style={{ border: 'none', background: 'transparent', color: '#475569', fontSize: '11.5px', cursor: 'pointer' }}
+                              style={{ border: 'none', background: 'transparent', color: 'var(--ui-text-secondary)', fontSize: '11.5px', cursor: 'pointer' }}
                             >
                               ✏️ Засах
                             </button>
@@ -928,7 +920,7 @@ function MemoryDetailPageContent() {
                               type="button"
                               onClick={() => void handleDeleteComment(rootComment.id)}
                               disabled={commentBusy}
-                              style={{ border: 'none', background: 'transparent', color: '#b91c1c', fontSize: '11.5px', cursor: 'pointer' }}
+                              style={{ border: 'none', background: 'transparent', color: 'var(--ui-danger-text)', fontSize: '11.5px', cursor: 'pointer' }}
                             >
                               ✕ Устгах
                             </button>
@@ -943,7 +935,8 @@ function MemoryDetailPageContent() {
                             value={editingCommentBody}
                             onChange={(e) => setEditingCommentBody(e.target.value)}
                             maxLength={2000}
-                            style={{ flex: 1, padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                            className="ui-input"
+                            style={{ flex: 1, padding: '6px 10px' }}
                           />
                           <button
                             type="button"
@@ -962,7 +955,7 @@ function MemoryDetailPageContent() {
                           </button>
                         </div>
                       ) : (
-                        <p style={{ margin: 0, fontSize: '13.5px', color: '#1e293b', lineHeight: 1.55 }}>
+                        <p style={{ margin: 0, fontSize: '13.5px', color: 'var(--ui-text-secondary)', lineHeight: 1.55 }}>
                           {rootComment.body}
                         </p>
                       )}
@@ -972,20 +965,20 @@ function MemoryDetailPageContent() {
                           style={{
                             marginTop: '10px',
                             paddingLeft: '14px',
-                            borderLeft: '2px solid #e2d9c8',
+                            borderLeft: '2px solid var(--ui-border-strong)',
                             display: 'flex',
                             flexDirection: 'column',
                             gap: '8px',
                           }}
                         >
                           {replies.map((reply) => (
-                            <div key={reply.id} style={{ padding: '8px 12px', borderRadius: '10px', background: '#ffffff', border: '1px solid #ede6d6' }}>
+                            <div key={reply.id} style={{ padding: '8px 12px', borderRadius: '10px', background: 'var(--ui-surface)', border: '1px solid var(--ui-border)' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                 <div>
-                                  <strong style={{ fontSize: '12.5px', color: '#17372b' }}>
+                                  <strong style={{ fontSize: '12.5px', color: 'var(--ui-text)' }}>
                                     {reply.author_name}
                                   </strong>
-                                  <small style={{ fontSize: '11px', color: '#64748b', marginLeft: '8px' }}>
+                                  <small style={{ fontSize: '11px', color: 'var(--ui-text-muted)', marginLeft: '8px' }}>
                                     {formatCreatedAt(reply.created_at)}
                                   </small>
                                 </div>
@@ -997,7 +990,7 @@ function MemoryDetailPageContent() {
                                         setEditingCommentId(reply.id);
                                         setEditingCommentBody(reply.body);
                                       }}
-                                      style={{ border: 'none', background: 'transparent', color: '#475569', fontSize: '11px', cursor: 'pointer' }}
+                                      style={{ border: 'none', background: 'transparent', color: 'var(--ui-text-secondary)', fontSize: '11px', cursor: 'pointer' }}
                                     >
                                       ✏️ Засах
                                     </button>
@@ -1007,7 +1000,7 @@ function MemoryDetailPageContent() {
                                       type="button"
                                       onClick={() => void handleDeleteComment(reply.id)}
                                       disabled={commentBusy}
-                                      style={{ border: 'none', background: 'transparent', color: '#b91c1c', fontSize: '11px', cursor: 'pointer' }}
+                                      style={{ border: 'none', background: 'transparent', color: 'var(--ui-danger-text)', fontSize: '11px', cursor: 'pointer' }}
                                     >
                                       ✕ Устгах
                                     </button>
@@ -1021,7 +1014,8 @@ function MemoryDetailPageContent() {
                                     value={editingCommentBody}
                                     onChange={(e) => setEditingCommentBody(e.target.value)}
                                     maxLength={2000}
-                                    style={{ flex: 1, padding: '5px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}
+                                    className="ui-input"
+                                    style={{ flex: 1, padding: '5px 8px', fontSize: '12.5px' }}
                                   />
                                   <button
                                     type="button"
@@ -1040,7 +1034,7 @@ function MemoryDetailPageContent() {
                                   </button>
                                 </div>
                               ) : (
-                                <p style={{ margin: 0, fontSize: '13px', color: '#334155' }}>{reply.body}</p>
+                                <p style={{ margin: 0, fontSize: '13px', color: 'var(--ui-text-secondary)' }}>{reply.body}</p>
                               )}
                             </div>
                           ))}

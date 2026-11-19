@@ -1,0 +1,460 @@
+/* Family Activities (Funds & Gatherings) — 5-Theme Tokenized Layout */
+
+.activities-empty-header {
+  margin-bottom: 20px;
+}
+
+.activities-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.activities-tab {
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: 1.5px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.activities-tab:hover {
+  border-color: var(--ui-accent-bright);
+}
+
+.activities-tab.is-active {
+  border: 2px solid var(--ui-accent-bright);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
+
+.activities-alert {
+  margin-bottom: 16px;
+}
+
+.activities-retry-btn {
+  margin-left: 10px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activities-public-section {
+  margin-top: 28px;
+  padding: 22px;
+  border-radius: 18px;
+  background: var(--ui-surface);
+  border: 1.5px solid var(--ui-border);
+}
+
+.activities-section-head {
+  margin-bottom: 16px;
+}
+
+.activities-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-accent);
+  letter-spacing: 0.06em;
+}
+
+.activities-section-title {
+  margin: 4px 0;
+  font: 700 20px Georgia, serif;
+  color: var(--ui-text);
+}
+
+.activities-section-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+.activities-status-msg {
+  font-size: 13px;
+  color: var(--ui-text-muted);
+  margin: 0;
+}
+
+.activities-grid-public {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.activities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 18px;
+}
+
+.activities-public-card {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--ui-surface-subtle);
+  border: 1px solid var(--ui-border);
+}
+
+.activities-public-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-accent);
+  margin-bottom: 6px;
+}
+
+.activities-card-title {
+  margin: 0 0 6px;
+  font: 700 18px Georgia, serif;
+  color: var(--ui-text);
+}
+
+.activities-card-title--sm {
+  font-size: 16px;
+}
+
+.activities-card-desc {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: var(--ui-text-secondary);
+  line-height: 1.55;
+}
+
+.activities-card-desc--compact {
+  margin-bottom: 0;
+}
+
+.activities-payment-box {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--ui-warning-bg);
+  border: 1px solid var(--ui-warning-border);
+}
+
+.activities-payment-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ui-warning-text);
+}
+
+.activities-payment-text {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ui-warning-text);
+  white-space: pre-wrap;
+}
+
+.activities-form-card {
+  padding: 20px;
+  margin-bottom: 24px;
+  border-radius: 16px;
+  background: var(--ui-surface);
+  border: 1.5px solid var(--ui-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activities-form-title {
+  margin: 0;
+  font: 700 18px Georgia, serif;
+  color: var(--ui-text);
+}
+
+.activities-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.activities-form-grid--events {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.activities-form-grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 10px;
+}
+
+.activities-field-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ui-text-secondary);
+}
+
+.activities-field-label--block {
+  margin-top: 10px;
+}
+
+.activities-field-input,
+.activities-field-select,
+.activities-field-textarea {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-input-border);
+  background: var(--ui-input-bg);
+  color: var(--ui-input-text);
+  font-size: 13px;
+}
+
+.activities-field-select {
+  height: 38px;
+  padding: 0 10px;
+}
+
+.activities-empty-box {
+  padding: 32px;
+  text-align: center;
+  border-radius: 16px;
+  background: var(--ui-surface-subtle);
+  border: 1px dashed var(--ui-border-strong);
+  color: var(--ui-text-muted);
+}
+
+.activities-card {
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--ui-surface);
+  border: 1.5px solid var(--ui-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activities-fund-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.activities-fund-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-text-muted);
+}
+
+.activities-fund-badge.is-active {
+  color: var(--ui-success-text);
+}
+
+.activities-toggle-btn {
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
+  cursor: pointer;
+}
+
+.activities-confirmed-box {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ui-success-bg);
+  border: 1px solid var(--ui-success-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.activities-confirmed-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ui-success-text);
+}
+
+.activities-confirmed-amount {
+  font-size: 17px;
+  color: var(--ui-success-text);
+}
+
+.activities-subform {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--ui-surface-subtle);
+  border: 1px solid var(--ui-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.activities-subform--rsvp {
+  align-items: flex-end;
+}
+
+.activities-subform-input {
+  flex: 1;
+  min-width: 140px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-input-border);
+  background: var(--ui-input-bg);
+  color: var(--ui-input-text);
+  font-size: 13px;
+}
+
+.activities-num-input {
+  width: 74px;
+  display: block;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--ui-input-border);
+  background: var(--ui-input-bg);
+  color: var(--ui-input-text);
+}
+
+.activities-subform-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ui-text-secondary);
+  cursor: pointer;
+}
+
+.activities-subform-btn {
+  font-size: 12.5px;
+  padding: 7px 14px;
+}
+
+.activities-list-section {
+  border-top: 1px solid var(--ui-border);
+  padding-top: 10px;
+}
+
+.activities-list-heading {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--ui-text-secondary);
+}
+
+.activities-list-empty {
+  color: var(--ui-text-muted);
+}
+
+.activities-list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.activities-ledger-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ui-surface-subtle);
+  border: 1px solid var(--ui-border);
+  font-size: 12.5px;
+  color: var(--ui-text);
+}
+
+.activities-ledger-status {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ui-accent);
+}
+
+.activities-ledger-status.is-confirmed {
+  color: var(--ui-success-text);
+}
+
+.activities-ledger-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.activities-btn-report {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--ui-warning-border);
+  background: var(--ui-warning-bg);
+  color: var(--ui-warning-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activities-btn-confirm {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: none;
+  background: #16a34a;
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activities-details {
+  font-size: 12.5px;
+  color: var(--ui-text-secondary);
+}
+
+.activities-details-summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ui-accent);
+}
+
+.activities-event-date {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ui-accent);
+}
+
+.activities-event-location {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.activities-event-fee {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-secondary);
+}
+
+.activities-rsvp-confirmed {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ui-success-bg);
+  border: 1px solid var(--ui-success-border);
+  font-size: 13px;
+  color: var(--ui-success-text);
+}
+
+.activities-rsvp-fee {
+  margin: 4px 0 8px;
+}
+
+.activities-rsvp-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}

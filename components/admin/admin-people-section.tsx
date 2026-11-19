@@ -170,7 +170,7 @@ export function AdminPeopleSection({
                       {dup.personB.last_name} {dup.personB.first_name}
                     </strong>{' '}
                     ({dup.personB.birth_date?.slice(0, 4) || '—'})
-                    <span style={{ marginLeft: 8, color: '#74857b' }}>
+                    <span style={{ marginLeft: 8, color: 'var(--ui-text-muted)' }}>
                       [{dup.reasons.join(', ')}]
                     </span>
                   </div>
@@ -545,7 +545,7 @@ export function AdminPeopleSection({
             })}
           </div>
         ) : (
-          <p style={{ fontSize: 13, color: '#74857b', padding: '16px 0' }}>Бүртгэлтэй хүн олдсонгүй.</p>
+          <p className="admin-muted-text" style={{ padding: '16px 0' }}>Бүртгэлтэй хүн олдсонгүй.</p>
         )}
       </div>
     );

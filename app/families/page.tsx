@@ -434,9 +434,9 @@ function FamiliesContent() {
             style={{
               padding: '12px 18px',
               borderRadius: '12px',
-              background: 'rgba(16, 185, 129, 0.12)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              color: '#047857',
+              background: 'var(--ui-success-bg)',
+              border: '1px solid var(--ui-success-border)',
+              color: 'var(--ui-success-text)',
               fontSize: '13px',
               fontWeight: 600,
               display: 'flex',
@@ -455,9 +455,9 @@ function FamiliesContent() {
             style={{
               padding: '12px 18px',
               borderRadius: '12px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.25)',
-              color: '#b91c1c',
+              background: 'var(--ui-danger-bg)',
+              border: '1px solid var(--ui-danger-border)',
+              color: 'var(--ui-danger-text)',
               fontSize: '13px',
               display: 'flex',
               alignItems: 'center',
@@ -615,10 +615,10 @@ function FamiliesContent() {
 
                 {/* Edit Family Info Form */}
                 {editing ? (
-                  <form onSubmit={saveFamily} style={{ marginTop: '20px', padding: '16px', background: 'var(--parchment-canvas, #f6f2e8)', borderRadius: '12px' }}>
-                    <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>Гэр бүлийн нэр, танилцуулга засах</h3>
+                  <form onSubmit={saveFamily} style={{ marginTop: '20px', padding: '16px', background: 'var(--ui-surface-subtle)', border: '1px solid var(--ui-border)', borderRadius: '12px' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: 'var(--ui-text)' }}>Гэр бүлийн нэр, танилцуулга засах</h3>
                     <div style={{ display: 'grid', gap: '10px', marginBottom: '14px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                      <label className="ui-label">
                         Гэр бүлийн нэр:
                         <input
                           value={name}
@@ -626,10 +626,11 @@ function FamiliesContent() {
                           maxLength={180}
                           required
                           disabled={mutation === 'edit'}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--parchment-border, #e2d9c8)', marginTop: '4px' }}
+                          className="ui-input"
+                          style={{ marginTop: '4px' }}
                         />
                       </label>
-                      <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                      <label className="ui-label">
                         Тайлбар:
                         <textarea
                           value={description}
@@ -637,7 +638,8 @@ function FamiliesContent() {
                           maxLength={10000}
                           rows={3}
                           disabled={mutation === 'edit'}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--parchment-border, #e2d9c8)', marginTop: '4px' }}
+                          className="ui-textarea"
+                          style={{ marginTop: '4px' }}
                         />
                       </label>
                     </div>
@@ -714,8 +716,9 @@ function FamiliesContent() {
                     style={{
                       padding: '10px 14px',
                       borderRadius: '8px',
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      color: '#b91c1c',
+                      background: 'var(--ui-danger-bg)',
+                      border: '1px solid var(--ui-danger-border)',
+                      color: 'var(--ui-danger-text)',
                       fontSize: '12px',
                       margin: '14px 0',
                     }}
@@ -809,7 +812,7 @@ function FamiliesContent() {
                       Уригдсан хүнд баталгаажуулах холбоос илгээгдэх бөгөөд зөвшөөрснөөр тухайн эрхээр системд орно.
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '14px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                      <label className="ui-label">
                         Имэйл хаяг:
                         <input
                           type="email"
@@ -818,10 +821,11 @@ function FamiliesContent() {
                           placeholder="tany-gerbul@example.mn"
                           required
                           disabled={Boolean(mutation)}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--parchment-border, #e2d9c8)', marginTop: '4px' }}
+                          className="ui-input"
+                          style={{ marginTop: '4px' }}
                         />
                       </label>
-                      <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                      <label className="ui-label">
                         Олгох эрхийн үүрэг:
                         <select
                           value={inviteRole}
@@ -939,7 +943,7 @@ export default function FamiliesPage() {
   return (
     <Suspense
       fallback={
-        <div style={{ padding: '64px', textAlign: 'center', color: '#74857b' }}>
+        <div style={{ padding: '64px', textAlign: 'center', color: 'var(--ui-text-muted)' }}>
           Гэр бүлүүдийг ачаалж байна…
         </div>
       }

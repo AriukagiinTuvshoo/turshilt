@@ -348,7 +348,7 @@ export function PedigreeWizardModal({
         display: 'grid',
         placeItems: 'center',
         padding: '16px',
-        background: 'rgba(7, 24, 18, 0.72)',
+        background: 'var(--ui-backdrop)',
         backdropFilter: 'blur(6px)',
       }}
       role="dialog"
@@ -361,10 +361,11 @@ export function PedigreeWizardModal({
           maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
-          background: 'var(--parchment-card, #fffdf9)',
-          border: '1.5px solid var(--parchment-border, #e2d9c8)',
+          background: 'var(--ui-surface)',
+          color: 'var(--ui-text)',
+          border: '1.5px solid var(--ui-border)',
           borderRadius: '20px',
-          boxShadow: '0 24px 70px rgba(0,0,0,0.35)',
+          boxShadow: 'var(--ui-shadow-modal)',
           overflow: 'hidden',
         }}
       >
@@ -375,8 +376,8 @@ export function PedigreeWizardModal({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '18px 24px',
-            borderBottom: '1px solid var(--parchment-border, #e2d9c8)',
-            background: 'var(--parchment-canvas, #f6f2e8)',
+            borderBottom: '1px solid var(--ui-border)',
+            background: 'var(--ui-surface-subtle)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -385,8 +386,8 @@ export function PedigreeWizardModal({
                 width: '36px',
                 height: '36px',
                 borderRadius: '10px',
-                background: 'rgba(217, 119, 6, 0.15)',
-                color: '#d97706',
+                background: 'var(--ui-accent-soft)',
+                color: 'var(--ui-accent-bright)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -397,11 +398,11 @@ export function PedigreeWizardModal({
             <div>
               <h2
                 id="pedigree-wizard-title"
-                style={{ font: '700 18px Georgia, serif', margin: 0, color: 'var(--ink-primary, #17372b)' }}
+                style={{ font: '700 18px Georgia, serif', margin: 0, color: 'var(--ui-text)' }}
               >
                 Удмын Ухаалаг Холболт (Ураг Зангидах Хөтөч)
               </h2>
-              <small style={{ color: 'var(--ink-secondary, #485c53)', fontSize: '11.5px' }}>
+              <small style={{ color: 'var(--ui-text-secondary)', fontSize: '11.5px' }}>
                 Шинэ хүн бүртгэж зангидах эсвэл бүртгэлтэй хүмүүсийг хооронд нь ухаалгаар холбох
               </small>
             </div>
@@ -415,13 +416,13 @@ export function PedigreeWizardModal({
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              border: '1px solid var(--parchment-border, #e2d9c8)',
-              background: '#ffffff',
+              border: '1px solid var(--ui-border)',
+              background: 'var(--ui-surface-elevated)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: '#64748b',
+              color: 'var(--ui-text-secondary)',
             }}
           >
             <X size={16} />
@@ -445,9 +446,9 @@ export function PedigreeWizardModal({
               style={{
                 padding: '12px 16px',
                 borderRadius: '10px',
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                color: '#b91c1c',
+                background: 'var(--ui-danger-bg)',
+                border: '1px solid var(--ui-danger-border)',
+                color: 'var(--ui-danger-text)',
                 fontSize: '12.5px',
                 display: 'flex',
                 alignItems: 'center',
@@ -470,7 +471,8 @@ export function PedigreeWizardModal({
                 gap: '8px',
                 padding: '5px',
                 borderRadius: '12px',
-                background: '#ede6d6',
+                background: 'var(--ui-surface-subtle)',
+                border: '1px solid var(--ui-border)',
               }}
             >
               <button
@@ -489,9 +491,9 @@ export function PedigreeWizardModal({
                   fontSize: '12.5px',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  background: mode === 'create' ? '#ffffff' : 'transparent',
-                  color: mode === 'create' ? '#17372b' : '#57685e',
-                  boxShadow: mode === 'create' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                  background: mode === 'create' ? 'var(--ui-surface-elevated)' : 'transparent',
+                  color: mode === 'create' ? 'var(--ui-text)' : 'var(--ui-text-muted)',
+                  boxShadow: mode === 'create' ? 'var(--ui-shadow-sm)' : 'none',
                 }}
               >
                 <UserPlus size={15} /> ✨ Шинэ хүн бүртгэж холбох
@@ -513,9 +515,9 @@ export function PedigreeWizardModal({
                   fontSize: '12.5px',
                   fontWeight: 700,
                   cursor: people.length < 2 ? 'not-allowed' : 'pointer',
-                  background: mode === 'existing' ? '#ffffff' : 'transparent',
-                  color: mode === 'existing' ? '#b45309' : '#57685e',
-                  boxShadow: mode === 'existing' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                  background: mode === 'existing' ? 'var(--ui-surface-elevated)' : 'transparent',
+                  color: mode === 'existing' ? 'var(--ui-accent-text)' : 'var(--ui-text-muted)',
+                  boxShadow: mode === 'existing' ? 'var(--ui-shadow-sm)' : 'none',
                   opacity: people.length < 2 ? 0.5 : 1,
                 }}
               >
@@ -529,8 +531,8 @@ export function PedigreeWizardModal({
             style={{
               padding: '16px',
               borderRadius: '14px',
-              background: 'var(--parchment-canvas, #f6f2e8)',
-              border: '1px solid var(--parchment-border, #e2d9c8)',
+              background: 'var(--ui-surface-subtle)',
+              border: '1px solid var(--ui-border)',
             }}
           >
             {people.length > 0 && (
@@ -541,7 +543,7 @@ export function PedigreeWizardModal({
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '0.06em',
-                    color: '#b45309',
+                    color: 'var(--ui-accent)',
                     display: 'block',
                     marginBottom: '6px',
                   }}
@@ -572,7 +574,7 @@ export function PedigreeWizardModal({
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
-                color: '#b45309',
+                color: 'var(--ui-accent)',
                 display: 'block',
                 marginBottom: '8px',
               }}
@@ -603,16 +605,16 @@ export function PedigreeWizardModal({
                       borderRadius: '10px',
                       textAlign: 'left',
                       border: isSelected
-                        ? '2px solid #d97706'
-                        : '1px solid var(--parchment-border, #e2d9c8)',
-                      background: isSelected ? 'rgba(217, 119, 6, 0.12)' : '#ffffff',
-                      color: isSelected ? '#b45309' : 'var(--ink-primary, #17372b)',
+                        ? '2px solid var(--ui-accent-bright)'
+                        : '1px solid var(--ui-border)',
+                      background: isSelected ? 'var(--ui-accent-soft)' : 'var(--ui-surface)',
+                      color: isSelected ? 'var(--ui-accent-text)' : 'var(--ui-text)',
                       cursor: 'pointer',
                       transition: 'all 0.14s ease',
                     }}
                   >
                     <strong style={{ display: 'block', fontSize: '12.5px' }}>{item.label}</strong>
-                    <small style={{ fontSize: '10px', color: '#64748b' }}>{item.desc}</small>
+                    <small style={{ fontSize: '10px', color: 'var(--ui-text-muted)' }}>{item.desc}</small>
                   </button>
                 );
               })}
@@ -625,10 +627,10 @@ export function PedigreeWizardModal({
                 style={{
                   marginTop: '14px',
                   paddingTop: '12px',
-                  borderTop: '1px dashed var(--parchment-border, #e2d9c8)',
+                  borderTop: '1px dashed var(--ui-border)',
                 }}
               >
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-primary, #17372b)' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ui-text)' }}>
                   Хоёр дахь эцэг/эх (Хань)-тэй нь зэрэг холбох:
                 </label>
                 <select
@@ -655,13 +657,13 @@ export function PedigreeWizardModal({
                 style={{
                   marginTop: '14px',
                   paddingTop: '12px',
-                  borderTop: '1px dashed var(--parchment-border, #e2d9c8)',
+                  borderTop: '1px dashed var(--ui-border)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '8px',
                 }}
               >
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-primary, #17372b)' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ui-text)' }}>
                   Одоо бүртгэлтэй нөгөө эцэг/эх:
                 </label>
                 <select
@@ -684,7 +686,7 @@ export function PedigreeWizardModal({
                         type="checkbox"
                         checked={autoMarryCoparent}
                         onChange={(e) => setAutoMarryCoparent(e.target.checked)}
-                        style={{ accentColor: '#d97706' }}
+                        style={{ accentColor: 'var(--ui-accent-bright)' }}
                       />
                       <span>Эцэг эх хоёрын хооронд автоматаар Гэрлэлтийн холбоос (💍 Хос) үүсгэх</span>
                     </label>
@@ -693,7 +695,7 @@ export function PedigreeWizardModal({
                         type="checkbox"
                         checked={applyToSiblings}
                         onChange={(e) => setApplyToSiblings(e.target.checked)}
-                        style={{ accentColor: '#d97706' }}
+                        style={{ accentColor: 'var(--ui-accent-bright)' }}
                       />
                       <span>Төрсөн ах, эгч, дүүст нь мөн адил эцэг/эхээр шууд холбох</span>
                     </label>
@@ -709,14 +711,14 @@ export function PedigreeWizardModal({
                   marginTop: '14px',
                   padding: '12px',
                   borderRadius: '10px',
-                  background: 'rgba(217, 119, 6, 0.08)',
-                  border: '1px solid rgba(217, 119, 6, 0.28)',
+                  background: 'var(--ui-warning-bg)',
+                  border: '1px solid var(--ui-warning-border)',
                 }}
               >
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#92400e', marginBottom: '6px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ui-warning-text)', marginBottom: '6px' }}>
                   💡 {anchorPerson ? formatPersonName(anchorPerson) : 'Тулгуур хүн'} дээр эцэг эх хараахан бүртгэгдээгүй байна.
                 </div>
-                <small style={{ display: 'block', fontSize: '11.5px', color: '#78350f', marginBottom: '10px' }}>
+                <small style={{ display: 'block', fontSize: '11.5px', color: 'var(--ui-warning-text)', marginBottom: '10px' }}>
                   Ах дүүс модон дээр зэрэгцэн зурагдахын тулд дундын эцэг (эсвэл эх)-ийн нэрийг оруулбал хоёуланг нь автоматаар зангидна:
                 </small>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 110px', gap: '8px' }}>
@@ -725,34 +727,19 @@ export function PedigreeWizardModal({
                     value={sharedParentLastName}
                     onChange={(e) => setSharedParentLastName(e.target.value)}
                     placeholder="Эцгийн овог"
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: '8px',
-                      border: '1px solid #d6cbb5',
-                      fontSize: '12px',
-                    }}
+                    className="ui-input"
                   />
                   <input
                     type="text"
                     value={sharedParentFirstName}
                     onChange={(e) => setSharedParentFirstName(e.target.value)}
                     placeholder="Эцэг/эхийн нэр *"
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: '8px',
-                      border: '1px solid #d6cbb5',
-                      fontSize: '12px',
-                    }}
+                    className="ui-input"
                   />
                   <select
                     value={sharedParentGender}
                     onChange={(e) => setSharedParentGender(e.target.value as 'male' | 'female')}
-                    style={{
-                      padding: '6px 8px',
-                      borderRadius: '8px',
-                      border: '1px solid #d6cbb5',
-                      fontSize: '12px',
-                    }}
+                    className="ui-select"
                   >
                     <option value="male">Эцэг</option>
                     <option value="female">Эх</option>
@@ -768,9 +755,9 @@ export function PedigreeWizardModal({
               style={{
                 padding: '12px 16px',
                 borderRadius: '10px',
-                background: 'rgba(245, 158, 11, 0.12)',
-                border: '1px solid rgba(245, 158, 11, 0.35)',
-                color: '#b45309',
+                background: 'var(--ui-warning-bg)',
+                border: '1px solid var(--ui-warning-border)',
+                color: 'var(--ui-warning-text)',
                 fontSize: '12px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -794,8 +781,8 @@ export function PedigreeWizardModal({
               style={{
                 padding: '16px',
                 borderRadius: '14px',
-                background: '#ffffff',
-                border: '1px solid var(--parchment-border, #e2d9c8)',
+                background: 'var(--ui-surface-subtle)',
+                border: '1px solid var(--ui-border)',
               }}
             >
               <label
@@ -804,7 +791,7 @@ export function PedigreeWizardModal({
                   fontWeight: 700,
                   textTransform: 'uppercase',
                   letterSpacing: '0.06em',
-                  color: '#b45309',
+                  color: 'var(--ui-accent)',
                   display: 'block',
                   marginBottom: '8px',
                 }}
@@ -819,7 +806,7 @@ export function PedigreeWizardModal({
                     left: '12px',
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    color: '#64748b',
+                    color: 'var(--ui-text-muted)',
                   }}
                 />
                 <input
@@ -827,13 +814,8 @@ export function PedigreeWizardModal({
                   value={existingSearch}
                   onChange={(e) => setExistingSearch(e.target.value)}
                   placeholder="Овог, нэр эсвэл төрсөн оноор хайх…"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px 8px 34px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--parchment-border, #e2d9c8)',
-                    fontSize: '13px',
-                  }}
+                  className="ui-input"
+                  style={{ paddingLeft: '34px' }}
                 />
               </div>
 
@@ -847,7 +829,7 @@ export function PedigreeWizardModal({
                 }}
               >
                 {eligibleExistingPeople.length === 0 ? (
-                  <p style={{ fontSize: '12.5px', color: '#64748b', margin: '8px 0' }}>
+                  <p style={{ fontSize: '12.5px', color: 'var(--ui-text-muted)', margin: '8px 0' }}>
                     Тохирох бүртгэлтэй хүн олдсонгүй.
                   </p>
                 ) : (
@@ -864,17 +846,18 @@ export function PedigreeWizardModal({
                           justifyContent: 'space-between',
                           padding: '9px 12px',
                           borderRadius: '9px',
-                          border: selected ? '2px solid #d97706' : '1px solid #e2d9c8',
-                          background: selected ? 'rgba(217, 119, 6, 0.1)' : '#fcfaf5',
+                          border: selected ? '2px solid var(--ui-accent-bright)' : '1px solid var(--ui-border)',
+                          background: selected ? 'var(--ui-accent-soft)' : 'var(--ui-surface)',
+                          color: 'var(--ui-text)',
                           cursor: 'pointer',
                           textAlign: 'left',
                         }}
                       >
                         <div>
-                          <strong style={{ fontSize: '13px', color: '#17372b' }}>
+                          <strong style={{ fontSize: '13px', color: 'var(--ui-text)' }}>
                             {formatPersonName(p)}
                           </strong>
-                          <span style={{ fontSize: '11.5px', color: '#64748b', marginLeft: '8px' }}>
+                          <span style={{ fontSize: '11.5px', color: 'var(--ui-text-muted)', marginLeft: '8px' }}>
                             {p.gender === 'female' ? 'Эмэгтэй' : 'Эрэгтэй'}
                             {p.birth_date ? ` · ${p.birth_date.slice(0, 4)}` : ''}
                           </span>
@@ -883,7 +866,7 @@ export function PedigreeWizardModal({
                           style={{
                             fontSize: '11px',
                             fontWeight: 700,
-                            color: selected ? '#b45309' : '#64748b',
+                            color: selected ? 'var(--ui-accent-text)' : 'var(--ui-text-muted)',
                           }}
                         >
                           {selected ? '✓ Сонгосон' : 'Сонгох'}
@@ -903,7 +886,7 @@ export function PedigreeWizardModal({
                   fontWeight: 700,
                   textTransform: 'uppercase',
                   letterSpacing: '0.06em',
-                  color: '#b45309',
+                  color: 'var(--ui-accent)',
                   display: 'block',
                   marginBottom: '10px',
                 }}
@@ -919,7 +902,7 @@ export function PedigreeWizardModal({
                   marginBottom: '14px',
                 }}
               >
-                <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                <label className="ui-label">
                   Эцгийн нэр / Овог (Last Name)
                   <input
                     type="text"
@@ -927,18 +910,12 @@ export function PedigreeWizardModal({
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Боржигон / Дорж"
                     disabled={loading}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--parchment-border, #e2d9c8)',
-                      marginTop: '4px',
-                      fontSize: '13px',
-                    }}
+                    className="ui-input"
+                    style={{ marginTop: '4px' }}
                   />
                 </label>
 
-                <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                <label className="ui-label">
                   Өөрийн нэр (First Name) *
                   <input
                     type="text"
@@ -947,18 +924,12 @@ export function PedigreeWizardModal({
                     placeholder="Батбаяр"
                     required
                     disabled={loading}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--parchment-border, #e2d9c8)',
-                      marginTop: '4px',
-                      fontSize: '13px',
-                    }}
+                    className="ui-input"
+                    style={{ marginTop: '4px' }}
                   />
                 </label>
 
-                <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                <label className="ui-label">
                   Хүйс *
                   <select
                     value={gender}
@@ -972,7 +943,7 @@ export function PedigreeWizardModal({
                   </select>
                 </label>
 
-                <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                <label className="ui-label">
                   Төрсөн огноо (Он эсвэл YYYY-MM-DD)
                   <input
                     type="text"
@@ -980,14 +951,8 @@ export function PedigreeWizardModal({
                     onChange={(e) => setBirthDate(e.target.value)}
                     placeholder="1985 эсвэл 1985-06-15"
                     disabled={loading}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--parchment-border, #e2d9c8)',
-                      marginTop: '4px',
-                      fontSize: '13px',
-                    }}
+                    className="ui-input"
+                    style={{ marginTop: '4px' }}
                   />
                 </label>
               </div>
@@ -1016,13 +981,13 @@ export function PedigreeWizardModal({
                     checked={isAlive}
                     onChange={(e) => setIsAlive(e.target.checked)}
                     disabled={loading}
-                    style={{ width: '18px', height: '18px', accentColor: '#d97706' }}
+                    style={{ width: '18px', height: '18px', accentColor: 'var(--ui-accent-bright)' }}
                   />
                   <span>{isAlive ? '🟢 Амьд сэрүүн' : '🕊️ Тэнгэрт дэвшсэн'}</span>
                 </label>
 
                 {!isAlive && (
-                  <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                  <label className="ui-label">
                     Нас барсан он / огноо:
                     <input
                       type="text"
@@ -1030,19 +995,13 @@ export function PedigreeWizardModal({
                       onChange={(e) => setDeathDate(e.target.value)}
                       placeholder="2018"
                       disabled={loading}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--parchment-border, #e2d9c8)',
-                        marginTop: '4px',
-                        fontSize: '13px',
-                      }}
+                      className="ui-input"
+                      style={{ marginTop: '4px' }}
                     />
                   </label>
                 )}
 
-                <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                <label className="ui-label">
                   Ургийн овог / Дундах нэр:
                   <input
                     type="text"
@@ -1050,14 +1009,8 @@ export function PedigreeWizardModal({
                     onChange={(e) => setLineageName(e.target.value)}
                     placeholder="Хиад Боржигон"
                     disabled={loading}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--parchment-border, #e2d9c8)',
-                      marginTop: '4px',
-                      fontSize: '13px',
-                    }}
+                    className="ui-input"
+                    style={{ marginTop: '4px' }}
                   />
                 </label>
               </div>
@@ -1072,7 +1025,7 @@ export function PedigreeWizardModal({
               justifyContent: 'flex-end',
               gap: '12px',
               paddingTop: '14px',
-              borderTop: '1px solid var(--parchment-border, #e2d9c8)',
+              borderTop: '1px solid var(--ui-border)',
             }}
           >
             <button

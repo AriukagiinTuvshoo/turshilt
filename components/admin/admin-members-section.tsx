@@ -120,7 +120,7 @@ export function AdminMembersSection({
                                 style={{
                                   background: 'none',
                                   border: 'none',
-                                  color: '#b91c1c',
+                                  color: 'var(--ui-danger-text)',
                                   cursor: 'pointer',
                                   padding: '0 2px',
                                   fontSize: 11,
@@ -147,7 +147,7 @@ export function AdminMembersSection({
                                 style={{
                                   background: 'none',
                                   border: 'none',
-                                  color: '#0284c7',
+                                  color: 'var(--ui-info-text)',
                                   cursor: 'pointer',
                                   padding: '0 2px',
                                   fontSize: 11,
@@ -214,8 +214,8 @@ export function AdminMembersSection({
             <div className="admin-invite-banner">
               <div className="admin-card-header" style={{ marginBottom: 10 }}>
                 <div className="admin-alert-inner">
-                  <CheckCircle2 size={18} style={{ color: '#059669' }} />
-                  <strong style={{ fontSize: 15, color: '#065f46' }}>
+                  <CheckCircle2 size={18} style={{ color: 'var(--ui-success-text)' }} />
+                  <strong style={{ fontSize: 15, color: 'var(--ui-success-text)' }}>
                     Шинэ урилгын нууц холбоос амжилттай үүсгэгдлээ!
                   </strong>
                 </div>
@@ -368,7 +368,7 @@ export function AdminMembersSection({
               })}
             </div>
           ) : (
-            <p style={{ fontSize: 13, color: '#74857b', padding: '12px 0' }}>
+            <p className="admin-muted-text" style={{ padding: '12px 0' }}>
               Идэвхтэй хүлээгдэж буй урилга алга байна.
             </p>
           )}
@@ -386,10 +386,10 @@ export function AdminMembersSection({
             <div className="admin-modal-header">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+                  <h3 className="admin-modal-title">
                     👤 Гишүүнийг модон дахь хүнтэй холбох
                   </h3>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+                  <p className="admin-modal-sub">
                     Хэрэглэгч: <strong>{linkingMember.display_name || linkingMember.email}</strong> (
                     {roleLabel(linkingMember.role)})
                   </p>
@@ -405,7 +405,7 @@ export function AdminMembersSection({
             </div>
 
             <div className="admin-modal-body">
-              <p style={{ fontSize: 13, color: '#475569', margin: '0 0 14px', lineHeight: 1.5 }}>
+              <p className="admin-modal-desc">
                 Энэ хэрэглэгчийг ургийн модон дахь өөрийнх нь бие хүнтэй холбосноор тухайн хэрэглэгч өөрийн нэр дээрх мэдээлэл, дурсамж, эрх зүйн статусыг автоматаар уялдуулан харах боломжтой болно.
               </p>
 
@@ -420,7 +420,7 @@ export function AdminMembersSection({
                 />
               </div>
 
-              <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, border: '1px solid #f1f5f9', borderRadius: 10, padding: 6 }}>
+              <div className="admin-link-list">
                 {people
                   .filter((p) => {
                     if (!linkSearchQuery.trim()) return true;
@@ -437,52 +437,30 @@ export function AdminMembersSection({
                       <div
                         key={p.id}
                         onClick={() => setSelectedPersonForLink(p.id)}
-                        style={{
-                          padding: '10px 14px',
-                          borderRadius: 8,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          background: isSelected ? 'rgba(34, 197, 94, 0.08)' : isCurrent ? '#f0fdf4' : '#ffffff',
-                          border: isSelected ? '1.5px solid #16a34a' : isCurrent ? '1px solid #86efac' : '1px solid #e2e8f0',
-                        }}
+                        className={`admin-link-option ${isSelected ? 'is-selected' : isCurrent ? 'is-current' : ''}`}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: '50%',
-                              background: p.gender === 'female' ? '#fdf2f8' : '#eff6ff',
-                              color: p.gender === 'female' ? '#db2777' : '#2563eb',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontWeight: 700,
-                              fontSize: 13,
-                            }}
-                          >
+                          <div className={`admin-link-avatar ${p.gender === 'female' ? 'is-female' : ''}`}>
                             {(p.first_name || '?')[0]}
                           </div>
                           <div>
-                            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0f172a' }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ui-text)' }}>
                               {p.last_name ? `${p.last_name} ` : ''}
                               {p.first_name}
                               {p.gender === 'female' ? ' ♀' : ' ♂'}
                             </div>
-                            <div style={{ fontSize: 11, color: '#64748b' }}>
+                            <div style={{ fontSize: 11, color: 'var(--ui-text-muted)' }}>
                               {p.birth_date ? p.birth_date.slice(0, 4) : 'Төрсөн он тодорхойгүй'}
                               {p.is_alive ? ' (Энх тунх)' : p.death_date ? ` - ${p.death_date.slice(0, 4)}` : ''}
                             </div>
                           </div>
                         </div>
                         {isCurrent && (
-                          <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, background: '#dcfce7', padding: '2px 8px', borderRadius: 4 }}>
+                          <span className="admin-linked-pill">
                             Одоогийн холбоос
                           </span>
                         )}
-                        {isSelected && !isCurrent && <CheckCircle2 size={18} color="#16a34a" />}
+                        {isSelected && !isCurrent && <CheckCircle2 size={18} style={{ color: 'var(--ui-success-text)' }} />}
                       </div>
                     );
                   })}

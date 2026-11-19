@@ -77,7 +77,7 @@ export function ConfirmDialog({
         maxHeight: 'none',
         margin: 0,
         border: 'none',
-        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backgroundColor: 'var(--ui-backdrop)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
@@ -91,11 +91,12 @@ export function ConfirmDialog({
       <div
         style={{
           width: 'min(440px, 100%)',
-          background: 'var(--parchment-card, #fffdf9)',
-          border: '1px solid var(--parchment-border, #e2d9c8)',
+          background: 'var(--ui-surface)',
+          color: 'var(--ui-text)',
+          border: '1px solid var(--ui-border)',
           borderRadius: '16px',
           padding: '22px 24px',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25)',
+          boxShadow: 'var(--ui-shadow-modal)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
@@ -108,8 +109,8 @@ export function ConfirmDialog({
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: isDanger ? 'rgba(220, 38, 38, 0.12)' : 'rgba(217, 119, 6, 0.14)',
-                color: isDanger ? '#dc2626' : '#b45309',
+                background: isDanger ? 'var(--ui-danger-bg)' : 'var(--ui-warning-bg)',
+                color: isDanger ? 'var(--ui-danger-text)' : 'var(--ui-warning-text)',
                 flexShrink: 0,
               }}
               aria-hidden="true"
@@ -118,7 +119,7 @@ export function ConfirmDialog({
             </span>
             <h3
               id="confirm-dialog-title"
-              style={{ margin: 0, font: '600 17px Georgia, serif', color: 'var(--ink-primary, #17372b)' }}
+              style={{ margin: 0, font: '600 17px Georgia, serif', color: 'var(--ui-text)' }}
             >
               {title}
             </h3>
@@ -132,7 +133,7 @@ export function ConfirmDialog({
               background: 'none',
               border: 'none',
               cursor: busy ? 'not-allowed' : 'pointer',
-              color: '#64748b',
+              color: 'var(--ui-text-muted)',
               padding: '4px',
             }}
           >
@@ -146,7 +147,7 @@ export function ConfirmDialog({
             margin: '0 0 20px',
             fontSize: '13.5px',
             lineHeight: 1.55,
-            color: 'var(--ink-secondary, #485c53)',
+            color: 'var(--ui-text-secondary)',
             whiteSpace: 'pre-line',
           }}
         >
@@ -175,7 +176,7 @@ export function ConfirmDialog({
               border: 'none',
               fontWeight: 600,
               cursor: busy ? 'not-allowed' : 'pointer',
-              background: isDanger ? '#dc2626' : 'var(--ink-primary, #17372b)',
+              background: isDanger ? '#dc2626' : '#0f766e',
               color: '#ffffff',
             }}
           >

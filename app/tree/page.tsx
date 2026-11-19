@@ -47,7 +47,6 @@ const Tree3DScene = dynamic(() => import('../../components/tree-3d-scene'), {
   ),
 });
 
-type RelationKind = 'parent' | 'child' | 'spouse';
 export type BloodlineMode = 'none' | 'all' | 'paternal' | 'maternal' | 'descendants';
 
 interface BloodlineHighlight {
@@ -133,8 +132,6 @@ function TreePageContent() {
   const [searchPage, setSearchPage] = useState<PersonSearchPage | null>(null);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchPageNumber, setSearchPageNumber] = useState(1);
-  const [relation, setRelation] = useState<RelationKind | null>(null);
-  const [relationError, setRelationError] = useState('');
 
   // Kinship Modal State (Unified Mongolian Kinship Calculator)
   const [kinshipInitialPersonId, setKinshipInitialPersonId] = useState<string>('');
@@ -195,7 +192,6 @@ function TreePageContent() {
       setTree(null);
       setSelectedId('');
       setSearchPage(null);
-      setRelation(null);
 
       try {
         const familyData = await api<Family>('/families/' + encodeURIComponent(id), {
@@ -660,78 +656,6 @@ function TreePageContent() {
     setSearchPage(null);
     setSearch('');
     await loadTree(familyId, personId, depth);
-  }
-
-  async function addRelation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!relation || !selectedId || !familyId) return;
-
-    setRelationError('');
-    setError('');
-    const form = new FormData(event.currentTarget);
-    const existingId = String(form.get('existing') ?? '');
-
-    try {
-      let relatedId = existingId;
-      if (!relatedId) {
-        const fullName = String(form.get('name') ?? '')
-          .trim()
-          .split(/\s+/)
-          .filter(Boolean);
-        const created = await api<Person>(
-          '/families/' + encodeURIComponent(familyId) + '/persons',
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              first_name: fullName.at(-1) ?? '',
-              last_name: fullName.slice(0, -1).join(' '),
-              gender: form.get('gender'),
-              visibility: 'family',
-            }),
-          },
-        );
-        relatedId = created.id;
-      }
-
-      if (relation === 'spouse') {
-        await api(
-          '/families/' + encodeURIComponent(familyId) + '/marriages',
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              person_1_id: selectedId,
-              person_2_id: relatedId,
-              status: 'married',
-              start_date: form.get('start_date') || null,
-            }),
-          },
-        );
-      } else {
-        await api(
-          '/families/' +
-            encodeURIComponent(familyId) +
-            '/relationships/parent-child',
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              parent_id: relation === 'parent' ? relatedId : selectedId,
-              child_id: relation === 'parent' ? selectedId : relatedId,
-              relationship_type: form.get('relationship_type'),
-            }),
-          },
-        );
-      }
-
-      setRelation(null);
-      setNotice('Гэр бүлийн холбоо хадгалагдлаа.');
-      await loadTree(familyId, selectedId, depth);
-    } catch (cause) {
-      setRelationError(
-        cause instanceof Error
-          ? cause.message
-          : 'Холбоог хадгалж чадсангүй.',
-      );
-    }
   }
 
   async function divorce(marriageId: string) {
@@ -1555,85 +1479,6 @@ function TreePageContent() {
           <span>Гэрлэлт болон эцэг-эх/хүүхдийн холбоо тусдаа хадгалагдана.</span>
         </footer>
       </section>
-
-      {relation && selectedPerson && (
-        <div className="tree-modal-backdrop" role="presentation" onMouseDown={() => setRelation(null)}>
-          <section
-            className="tree-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="tree-relation-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="tree-modal-heading">
-              <div>
-                <p className="tree-eyebrow">ХОЛБОО</p>
-                <h2 id="tree-relation-title">
-                  {relation === 'parent' ? 'Эцэг/эх нэмэх' : relation === 'child' ? 'Хүүхэд нэмэх' : 'Гэрлэлт нэмэх'}
-                </h2>
-              </div>
-              <button type="button" onClick={() => setRelation(null)} aria-label="Холбооны цонхыг хаах">×</button>
-            </div>
-
-            {relationError && <div className="tree-alert tree-alert--error" role="alert">{relationError}</div>}
-
-            <form onSubmit={addRelation} className="tree-modal-form">
-              <label>
-                <span>Одоо байгаа хүнээс сонгох</span>
-                <select name="existing" defaultValue="">
-                  <option value="">Шинэ хүн үүсгэх</option>
-                  {tree?.persons
-                    ?.filter((person) => person.id !== selectedId)
-                    .map((person) => (
-                      <option value={person.id} key={person.id}>
-                        {personName(person)}
-                      </option>
-                    ))}
-                </select>
-              </label>
-
-              <label>
-                <span>Шинэ хүний нэр</span>
-                <input name="name" maxLength={360} placeholder="Нэр Овог" />
-              </label>
-
-              <label>
-                <span>Хүйс</span>
-                <select name="gender" defaultValue="unknown">
-                  <option value="unknown">Тодорхойгүй</option>
-                  <option value="male">Эрэгтэй</option>
-                  <option value="female">Эмэгтэй</option>
-                  <option value="other">Бусад</option>
-                </select>
-              </label>
-
-              {relation === 'spouse' ? (
-                <label>
-                  <span>Гэрлэсэн огноо</span>
-                  <input name="start_date" type="date" />
-                </label>
-              ) : (
-                <label>
-                  <span>Холбооны төрөл</span>
-                  <select name="relationship_type" defaultValue="biological">
-                    <option value="biological">Төрсөн</option>
-                    <option value="adoptive">Үрчилсэн</option>
-                  </select>
-                </label>
-              )}
-
-              <div className="tree-modal-actions">
-                <button type="button" className="tree-button tree-button--secondary" onClick={() => setRelation(null)}>
-                  Болих
-                </button>
-                <button type="submit" className="tree-button tree-button--primary">
-                  Холбоог хадгалах
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
 
       {/* Vector Print & Wall Art Export Modal */}
       <TreeExportModal

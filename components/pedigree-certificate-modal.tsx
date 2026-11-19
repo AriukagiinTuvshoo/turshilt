@@ -84,7 +84,7 @@ export function PedigreeCertificateModal({
         position: 'fixed',
         inset: 0,
         zIndex: 9999,
-        background: 'rgba(10, 20, 15, 0.75)',
+        background: 'var(--ui-backdrop)',
         backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
@@ -96,16 +96,17 @@ export function PedigreeCertificateModal({
       <div
         className="pedigree-certificate-container"
         style={{
-          background: '#fcfaf5',
+          background: 'var(--ui-surface)',
+          color: 'var(--ui-text)',
           borderRadius: '16px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+          boxShadow: 'var(--ui-shadow-modal)',
           maxWidth: '920px',
           width: '100%',
           maxHeight: '94vh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          border: '1px solid #d4c5a9',
+          border: '1px solid var(--ui-border)',
         }}
       >
         {/* Modal Toolbar Header */}
@@ -116,17 +117,17 @@ export function PedigreeCertificateModal({
             justifyContent: 'space-between',
             alignItems: 'center',
             padding: '16px 24px',
-            background: '#ffffff',
-            borderBottom: '1px solid #e7ded0',
+            background: 'var(--ui-surface)',
+            borderBottom: '1px solid var(--ui-border)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Award size={22} color="#b45309" />
+            <Award size={22} style={{ color: 'var(--ui-accent-bright)' }} />
             <div>
-              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#17372b' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--ui-text)' }}>
                 Монгол Ургийн Батламж үүсгэх
               </h3>
-              <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--ui-text-muted)' }}>
                 Монгол уламжлалт хэв маяг бүхий удмын сангийн дотоод дурсгалын батламж
               </p>
             </div>
@@ -159,7 +160,7 @@ export function PedigreeCertificateModal({
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
-                color: '#6b7280',
+                color: 'var(--ui-text-muted)',
                 padding: '6px',
                 borderRadius: '6px',
               }}
@@ -178,12 +179,12 @@ export function PedigreeCertificateModal({
             flexWrap: 'wrap',
             gap: '16px',
             padding: '12px 24px',
-            background: '#faf7f0',
-            borderBottom: '1px solid #e7ded0',
+            background: 'var(--ui-surface-subtle)',
+            borderBottom: '1px solid var(--ui-border)',
             fontSize: '12.5px',
           }}
         >
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#374151' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--ui-text-secondary)' }}>
             Зориулалт:
             <input
               type="text"
@@ -193,14 +194,16 @@ export function PedigreeCertificateModal({
               style={{
                 padding: '5px 10px',
                 borderRadius: '6px',
-                border: '1px solid #d1d5db',
+                border: '1px solid var(--ui-input-border)',
+                background: 'var(--ui-input-bg)',
+                color: 'var(--ui-input-text)',
                 fontSize: '12.5px',
                 width: '180px',
               }}
             />
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#374151' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--ui-text-secondary)' }}>
             Уриа үг:
             <input
               type="text"
@@ -209,14 +212,16 @@ export function PedigreeCertificateModal({
               style={{
                 padding: '5px 10px',
                 borderRadius: '6px',
-                border: '1px solid #d1d5db',
+                border: '1px solid var(--ui-input-border)',
+                background: 'var(--ui-input-bg)',
+                color: 'var(--ui-input-text)',
                 fontSize: '12.5px',
                 width: '260px',
               }}
             />
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#374151' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: 'var(--ui-text-secondary)' }}>
             <input
               type="checkbox"
               checked={showTamga}
@@ -234,7 +239,7 @@ export function PedigreeCertificateModal({
             padding: '30px',
             display: 'flex',
             justifyContent: 'center',
-            background: '#e9e3d5',
+            background: 'var(--ui-bg)',
           }}
         >
           <div

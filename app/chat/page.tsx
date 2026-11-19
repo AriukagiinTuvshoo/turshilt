@@ -211,8 +211,9 @@ function ChatContent() {
         <span
           style={{
             fontSize: '11px',
-            color: '#b45309',
-            background: '#fef3c7',
+            color: 'var(--ui-warning-text)',
+            background: 'var(--ui-warning-bg)',
+            border: '1px solid var(--ui-warning-border)',
             padding: '2px 7px',
             borderRadius: '12px',
             fontWeight: 600,
@@ -230,8 +231,9 @@ function ChatContent() {
         <span
           style={{
             fontSize: '11px',
-            color: '#15803d',
-            background: '#dcfce7',
+            color: 'var(--ui-success-text)',
+            background: 'var(--ui-success-bg)',
+            border: '1px solid var(--ui-success-border)',
             padding: '2px 7px',
             borderRadius: '12px',
             fontWeight: 600,
@@ -248,8 +250,9 @@ function ChatContent() {
       <span
         style={{
           fontSize: '11px',
-          color: '#475569',
-          background: '#f1f5f9',
+          color: 'var(--ui-text-secondary)',
+          background: 'var(--ui-surface-subtle)',
+          border: '1px solid var(--ui-border)',
           padding: '2px 7px',
           borderRadius: '12px',
           fontWeight: 500,
@@ -278,9 +281,9 @@ function ChatContent() {
 
   if (!familyId) {
     return (
-      <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
+      <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--ui-text-muted)' }}>
         <MessagesSquare size={48} style={{ margin: '0 auto 16px', opacity: 0.4 }} />
-        <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#17372b', margin: '0 0 8px' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--ui-text)', margin: '0 0 8px' }}>
           Гэр бүлийн сонголт хийгдээгүй байна
         </h3>
         <p style={{ fontSize: '14px', margin: 0 }}>
@@ -296,10 +299,11 @@ function ChatContent() {
         display: 'flex',
         height: 'calc(100vh - 80px)',
         maxHeight: '920px',
-        background: '#ffffff',
+        background: 'var(--ui-surface)',
+        color: 'var(--ui-text)',
         borderRadius: '16px',
-        border: '1px solid var(--parchment-border, #e2d9c8)',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+        border: '1px solid var(--ui-border)',
+        boxShadow: 'var(--ui-shadow-sm)',
         overflow: 'hidden',
         margin: '0',
       }}
@@ -308,8 +312,8 @@ function ChatContent() {
       <div
         style={{
           width: '320px',
-          borderRight: '1px solid var(--parchment-border, #e2d9c8)',
-          background: 'var(--parchment-card, #fbf9f4)',
+          borderRight: '1px solid var(--ui-border)',
+          background: 'var(--ui-surface-subtle)',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 0,
@@ -317,34 +321,27 @@ function ChatContent() {
         className={mobileShowChat ? 'chat-contacts-mobile-hidden' : ''}
       >
         {/* Header */}
-        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--parchment-border, #e2d9c8)' }}>
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--ui-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--ink-primary, #17372b)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <MessagesSquare size={20} color="var(--ink-primary, #17372b)" />
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--ui-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MessagesSquare size={20} style={{ color: 'var(--ui-accent-bright)' }} />
               Гэр бүлийн яриа
             </h2>
-            <span style={{ fontSize: '12px', color: '#65776d', fontWeight: 600 }}>
+            <span style={{ fontSize: '12px', color: 'var(--ui-text-muted)', fontWeight: 600 }}>
               {members.length} гишүүн
             </span>
           </div>
 
           {/* Search Box */}
           <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#94a3b8' }} />
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--ui-text-muted)' }} />
             <input
               type="text"
               placeholder="Гишүүн хайх…"
               value={memberSearch}
               onChange={(e) => setMemberSearch(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px 8px 32px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '13px',
-                background: '#ffffff',
-                outline: 'none',
-              }}
+              className="ui-input"
+              style={{ paddingLeft: '32px' }}
             />
           </div>
         </div>
@@ -365,9 +362,9 @@ function ChatContent() {
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              background: activeTab === 'broadcast' ? '#ffffff' : 'transparent',
-              border: activeTab === 'broadcast' ? '1px solid #cbd5e1' : '1px solid transparent',
-              boxShadow: activeTab === 'broadcast' ? '0 2px 6px rgba(0,0,0,0.05)' : 'none',
+              background: activeTab === 'broadcast' ? 'var(--ui-surface-elevated)' : 'transparent',
+              border: activeTab === 'broadcast' ? '1px solid var(--ui-border-strong)' : '1px solid transparent',
+              boxShadow: activeTab === 'broadcast' ? 'var(--ui-shadow-sm)' : 'none',
               marginBottom: '10px',
               transition: 'all 0.15s ease',
             }}
@@ -388,10 +385,10 @@ function ChatContent() {
               <Users size={20} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#17372b', marginBottom: '2px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ui-text)', marginBottom: '2px' }}>
                 Бүх гэр бүлийн танхим
               </div>
-              <div style={{ fontSize: '12px', color: '#65776d', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--ui-text-muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
                 Нийтийн нээлттэй суваг
               </div>
@@ -404,7 +401,7 @@ function ChatContent() {
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '1px',
-              color: '#8b9690',
+              color: 'var(--ui-text-muted)',
               margin: '16px 6px 8px',
             }}
           >
@@ -413,7 +410,7 @@ function ChatContent() {
 
           {/* 2. Direct Contacts List */}
           {filteredMembers.length === 0 ? (
-            <div style={{ padding: '20px 10px', textAlign: 'center', fontSize: '12.5px', color: '#94a3b8' }}>
+            <div style={{ padding: '20px 10px', textAlign: 'center', fontSize: '12.5px', color: 'var(--ui-text-muted)' }}>
               {memberSearch.trim() ? 'Хайлтад тохирох гишүүн олдсонгүй.' : 'Одоогоор өөр гишүүн нэгдээгүй байна.'}
             </div>
           ) : (
@@ -436,9 +433,9 @@ function ChatContent() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '10px',
-                    background: isSelected ? '#ffffff' : 'transparent',
-                    border: isSelected ? '1px solid #cbd5e1' : '1px solid transparent',
-                    boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.04)' : 'none',
+                    background: isSelected ? 'var(--ui-surface-elevated)' : 'transparent',
+                    border: isSelected ? '1px solid var(--ui-border-strong)' : '1px solid transparent',
+                    boxShadow: isSelected ? 'var(--ui-shadow-sm)' : 'none',
                     marginBottom: '4px',
                     transition: 'all 0.15s ease',
                   }}
@@ -448,8 +445,9 @@ function ChatContent() {
                       width: '36px',
                       height: '36px',
                       borderRadius: '50%',
-                      background: isSelected ? '#e0f2fe' : '#f1f5f9',
-                      color: isSelected ? '#0284c7' : '#475569',
+                      background: isSelected ? 'var(--ui-info-bg)' : 'var(--ui-surface-elevated)',
+                      color: isSelected ? 'var(--ui-info-text)' : 'var(--ui-text-secondary)',
+                      border: '1px solid var(--ui-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -461,10 +459,10 @@ function ChatContent() {
                     {initialLetter}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '13.5px', fontWeight: isSelected ? 700 : 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: isSelected ? 700 : 600, color: 'var(--ui-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {member.person_name || member.display_name}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--ui-text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                       {roleBadge(member.role)}
                     </div>
                   </div>
@@ -481,7 +479,7 @@ function ChatContent() {
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          background: '#ffffff',
+          background: 'var(--ui-surface)',
           position: 'relative',
         }}
       >
@@ -489,11 +487,11 @@ function ChatContent() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--parchment-border, #e2d9c8)',
+            borderBottom: '1px solid var(--ui-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: '#ffffff',
+            background: 'var(--ui-surface)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -508,7 +506,7 @@ function ChatContent() {
                 padding: '4px',
                 cursor: 'pointer',
                 display: 'none',
-                color: '#17372b',
+                color: 'var(--ui-text)',
               }}
               title="Жагсаалт руу буцах"
             >
@@ -520,8 +518,8 @@ function ChatContent() {
                 width: '38px',
                 height: '38px',
                 borderRadius: '10px',
-                background: activeTab === 'broadcast' ? 'rgba(23, 55, 43, 0.08)' : '#e0f2fe',
-                color: activeTab === 'broadcast' ? '#17372b' : '#0284c7',
+                background: activeTab === 'broadcast' ? 'var(--ui-accent-soft)' : 'var(--ui-info-bg)',
+                color: activeTab === 'broadcast' ? 'var(--ui-accent-text)' : 'var(--ui-info-text)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -531,12 +529,12 @@ function ChatContent() {
             </div>
 
             <div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--ink-primary, #17372b)' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--ui-text)' }}>
                 {activeTab === 'broadcast'
                   ? 'Бүх гэр бүлийн танхим'
                   : selectedRecipient?.person_name || selectedRecipient?.display_name || 'Сонгосон гишүүн'}
               </h3>
-              <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#65776d' }}>
+              <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--ui-text-muted)' }}>
                 {activeTab === 'broadcast'
                   ? `Бүх гишүүд харах боломжтой нийтийн яриа • ${members.length} оролцогч`
                   : `Хоёр талын нууцлалтай хувийн яриа`}
@@ -551,20 +549,20 @@ function ChatContent() {
             flex: 1,
             overflowY: 'auto',
             padding: '20px 24px',
-            background: 'var(--parchment-canvas, #fdfcf9)',
+            background: 'var(--ui-bg)',
             display: 'flex',
             flexDirection: 'column',
             gap: '14px',
           }}
         >
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontSize: '13px' }}>
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--ui-text-muted)', fontSize: '13px' }}>
               Зурвасуудыг ачаалж байна…
             </div>
           ) : messages.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8b9690' }}>
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ui-text-muted)' }}>
               <MessageCircle size={40} style={{ margin: '0 auto 12px', opacity: 0.35 }} />
-              <div style={{ fontSize: '14.5px', fontWeight: 600, color: '#17372b', marginBottom: '6px' }}>
+              <div style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--ui-text)', marginBottom: '6px' }}>
                 Энд хараахан зурвас бичигдээгүй байна
               </div>
               <div style={{ fontSize: '12.5px', maxWidth: '340px', margin: '0 auto' }}>
@@ -591,7 +589,7 @@ function ChatContent() {
                 >
                   {!isMine && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', marginLeft: '6px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#17372b' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ui-text)' }}>
                         {msg.sender_name}
                       </span>
                       {roleBadge(msg.sender_role)}
@@ -603,10 +601,10 @@ function ChatContent() {
                       maxWidth: '70%',
                       padding: '11px 16px',
                       borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                      background: isMine ? 'var(--ink-primary, #17372b)' : '#ffffff',
-                      color: isMine ? '#ffffff' : '#0f172a',
-                      border: isMine ? 'none' : '1px solid #e2d9c8',
-                      boxShadow: '0 2px 5px rgba(0, 0, 0, 0.04)',
+                      background: isMine ? '#17372b' : 'var(--ui-surface)',
+                      color: isMine ? '#ffffff' : 'var(--ui-text)',
+                      border: isMine ? '1px solid rgba(255, 255, 255, 0.14)' : '1px solid var(--ui-border)',
+                      boxShadow: 'var(--ui-shadow-sm)',
                       fontSize: '14px',
                       lineHeight: 1.5,
                       wordBreak: 'break-word',
@@ -619,7 +617,7 @@ function ChatContent() {
                   <span
                     style={{
                       fontSize: '10.5px',
-                      color: '#94a3b8',
+                      color: 'var(--ui-text-muted)',
                       marginTop: '4px',
                       marginRight: isMine ? '6px' : 0,
                       marginLeft: isMine ? 0 : '6px',
@@ -639,8 +637,8 @@ function ChatContent() {
           onSubmit={handleSendMessage}
           style={{
             padding: '14px 20px',
-            borderTop: '1px solid var(--parchment-border, #e2d9c8)',
-            background: '#ffffff',
+            borderTop: '1px solid var(--ui-border)',
+            background: 'var(--ui-surface)',
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
@@ -662,10 +660,11 @@ function ChatContent() {
               flex: 1,
               padding: '11px 16px',
               borderRadius: '24px',
-              border: '1px solid #cbd5e1',
+              border: '1px solid var(--ui-input-border)',
               fontSize: '14px',
               outline: 'none',
-              background: '#f8fafc',
+              background: 'var(--ui-input-bg)',
+              color: 'var(--ui-input-text)',
             }}
           />
           <button
@@ -674,7 +673,7 @@ function ChatContent() {
             style={{
               padding: '10px 20px',
               borderRadius: '24px',
-              background: !inputText.trim() || sending ? '#cbd5e1' : 'var(--ink-primary, #17372b)',
+              background: !inputText.trim() || sending ? 'var(--ui-border-strong)' : '#17372b',
               color: '#ffffff',
               border: 'none',
               display: 'inline-flex',
@@ -708,7 +707,7 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={<div style={{ padding: '40px', textAlign: 'center', color: '#65776d' }}>Ачаалж байна…</div>}>
+    <Suspense fallback={<div style={{ padding: '40px', textAlign: 'center', color: 'var(--ui-text-muted)' }}>Ачаалж байна…</div>}>
       <ChatContent />
     </Suspense>
   );

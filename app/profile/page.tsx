@@ -655,7 +655,7 @@ function ProfilePageContent() {
               {birthDeath || 'Амьдралын огноо бүртгэгдээгүй'}
               {person.is_alive && ' · Амьд сэрүүн'}
               {age !== null && (
-                <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '12px', background: 'rgba(217, 119, 6, 0.14)', color: '#b45309', fontWeight: 700, fontSize: '11px' }}>
+                <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '12px', background: 'var(--ui-accent-soft)', color: 'var(--ui-accent-text)', border: '1px solid var(--ui-accent-border)', fontWeight: 700, fontSize: '11px' }}>
                   {person.is_alive ? `${age} настай` : `${age} насалсан`}
                 </span>
               )}
@@ -665,12 +665,12 @@ function ProfilePageContent() {
             {/* Quick Relatives Chips */}
             {(person.parents.length > 0 || person.spouses.length > 0) && (
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', color: '#64748b' }}>Шууд холбоос:</span>
+                <span style={{ fontSize: '11px', color: 'var(--ui-text-muted)' }}>Шууд холбоос:</span>
                 {person.parents.map((p) => (
                   <Link
                     key={p.id}
                     href={`/profile?family=${encodeURIComponent(family)}&person=${encodeURIComponent(p.id)}`}
-                    style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #cbd5e1', textDecoration: 'none', color: '#334155' }}
+                    style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: 'var(--ui-surface-subtle)', border: '1px solid var(--ui-border)', textDecoration: 'none', color: 'var(--ui-text)' }}
                   >
                     👤 {relationName(p)}
                   </Link>
@@ -679,7 +679,7 @@ function ProfilePageContent() {
                   <Link
                     key={s.id}
                     href={`/profile?family=${encodeURIComponent(family)}&person=${encodeURIComponent(s.id)}`}
-                    style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca', textDecoration: 'none', color: '#991b1b' }}
+                    style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: 'var(--ui-danger-bg)', border: '1px solid var(--ui-danger-border)', textDecoration: 'none', color: 'var(--ui-danger-text)' }}
                   >
                     💍 {relationName(s)}
                   </Link>
@@ -699,7 +699,7 @@ function ProfilePageContent() {
                 <button
                   type="button"
                   className="button"
-                  style={{ background: '#fef3c7', color: '#92400e', borderColor: '#fde68a', fontWeight: 700 }}
+                  style={{ background: 'var(--ui-warning-bg)', color: 'var(--ui-warning-text)', borderColor: 'var(--ui-warning-border)', fontWeight: 700 }}
                   disabled={mutationBusy}
                   onClick={async () => {
                     setMutationBusy(true);
@@ -723,7 +723,7 @@ function ProfilePageContent() {
                 <button
                   type="button"
                   className="button"
-                  style={{ background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0', fontWeight: 700 }}
+                  style={{ background: 'var(--ui-success-bg)', color: 'var(--ui-success-text)', borderColor: 'var(--ui-success-border)', fontWeight: 700 }}
                   onClick={() => {
                     setWizardRole('son');
                     setWizardMode('create');
@@ -770,7 +770,7 @@ function ProfilePageContent() {
                 <button
                   type="button"
                   className="button"
-                  style={{ background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' }}
+                  style={{ background: 'var(--ui-danger-bg)', color: 'var(--ui-danger-text)', borderColor: 'var(--ui-danger-border)' }}
                   onClick={handleDeletePerson}
                   disabled={mutationBusy}
                   title="Энэ хүнийг гэр бүлийн модноос устгах/салгах"
@@ -865,7 +865,7 @@ function ProfilePageContent() {
                     {biography || 'Одоогоор намтар бичигдээгүй байна.'}
                   </p>
                   {canEdit && (
-                    <form onSubmit={saveBiography} style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #e2d9c8' }}>
+                    <form onSubmit={saveBiography} style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed var(--ui-border)' }}>
                       <label>
                         <span style={{ fontWeight: 700 }}>Намтар шинэчлэн бичих / засах:</span>
                         <textarea
@@ -934,8 +934,8 @@ function ProfilePageContent() {
               )}
 
               {canEdit && (
-                <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid #e2d9c8' }}>
-                  <h3 style={{ fontSize: '15px', color: '#0f172a', margin: '0 0 12px' }}>+ Шинэ үйл явдал нэмэх</h3>
+                <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid var(--ui-border)' }}>
+                  <h3 style={{ fontSize: '15px', color: 'var(--ui-text)', margin: '0 0 12px' }}>+ Шинэ үйл явдал нэмэх</h3>
                   <form onSubmit={addEvent}>
                     <div className="profile-form-grid">
                       <label>
@@ -1085,7 +1085,7 @@ function ProfilePageContent() {
                                 setMutationBusy(false);
                               }
                             }}
-                            style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', borderRadius: 8, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
+                            style={{ border: '1px solid var(--ui-danger-border)', background: 'var(--ui-danger-bg)', color: 'var(--ui-danger-text)', borderRadius: 8, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
                           >
                             ✕ Салгах
                           </button>
@@ -1156,7 +1156,7 @@ function ProfilePageContent() {
                                 setMutationBusy(false);
                               }
                             }}
-                            style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', borderRadius: 8, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
+                            style={{ border: '1px solid var(--ui-danger-border)', background: 'var(--ui-danger-bg)', color: 'var(--ui-danger-text)', borderRadius: 8, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
                           >
                             ✕ Салгах
                           </button>
@@ -1200,7 +1200,7 @@ function ProfilePageContent() {
                               setMutationBusy(false);
                             }
                           }}
-                          style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', borderRadius: 8, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                          style={{ border: '1px solid var(--ui-danger-border)', background: 'var(--ui-danger-bg)', color: 'var(--ui-danger-text)', borderRadius: 8, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
                         >
                           ✕ Гэрлэлтийн холбоос устгах
                         </button>
@@ -1219,7 +1219,7 @@ function ProfilePageContent() {
               <div className="profile-card-heading">
                 <div><p className="eyebrow">АМАН ДУРСАМЖИЙН САН</p><h2>🎙️ Ахмад дээдсийн хууч яриа, дурсамж</h2></div>
               </div>
-              <p style={{ color: '#475569', fontSize: '13px', lineHeight: 1.7, margin: '0 0 16px' }}>
+              <p style={{ color: 'var(--ui-text-secondary)', fontSize: '13px', lineHeight: 1.7, margin: '0 0 16px' }}>
                 Ахмад настнуудын хуучилсан ам яриа, дурсамж тэмдэглэлийг энд сийрүүлбэл төрсөн он, сургууль, ажил алба, гэрлэлт, гавьяа шагналын цаг хугацааг тод ялган амьдралын он дарааллын хэлхээс болгон цэгцэлж өгнө.
               </p>
 
@@ -1263,18 +1263,18 @@ function ProfilePageContent() {
                   </button>
                 </form>
               ) : (
-                <div style={{ padding: '18px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '12px', textAlign: 'center', color: '#64748b' }}>
+                <div style={{ padding: '18px', background: 'var(--ui-surface-subtle)', border: '1px dashed var(--ui-border-strong)', borderRadius: '12px', textAlign: 'center', color: 'var(--ui-text-muted)' }}>
                   🔒 Та энэ хүний хууч яриа, дурсамжийг засах эрхгүй байна (Зөвхөн админ эсвэл үүсгэсэн хэрэглэгч боломжтой).
                 </div>
               )}
 
               {extractedResult && (
-                <div style={{ marginTop: '20px', padding: '16px', background: '#fefce8', border: '1px solid #fef08a', borderRadius: '12px' }}>
-                  <h4 style={{ margin: '0 0 8px', color: '#854d0e' }}>Шинжилгээний үр дүн:</h4>
-                  <p style={{ fontSize: '12px', color: '#713f12', margin: '0 0 10px' }}>
+                <div className="ui-callout ui-callout--warning" style={{ marginTop: '20px', padding: '16px', borderRadius: '12px' }}>
+                  <h4 style={{ margin: '0 0 8px', color: 'var(--ui-warning-text)' }}>Шинжилгээний үр дүн:</h4>
+                  <p style={{ fontSize: '12px', color: 'var(--ui-warning-text)', margin: '0 0 10px' }}>
                     Илэрсэн үйл явдал: <strong>{extractedResult.extracted_events.length}</strong> · Цагийн шугамд нэмэгдсэн: <strong>{extractedResult.created_events_count}</strong>
                   </p>
-                  <pre style={{ background: '#ffffff', padding: '12px', borderRadius: '8px', fontSize: '12px', whiteSpace: 'pre-wrap', color: '#1e293b', border: '1px solid #e2e8f0' }}>
+                  <pre style={{ background: 'var(--ui-surface)', padding: '12px', borderRadius: '8px', fontSize: '12px', whiteSpace: 'pre-wrap', color: 'var(--ui-text)', border: '1px solid var(--ui-border)' }}>
                     {extractedResult.suggested_biography}
                   </pre>
                 </div>

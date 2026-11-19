@@ -541,26 +541,26 @@ function MemoriesPageContent() {
                 <>
                   {/* Summary Stats Strip */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', margin: '20px 0 16px' }}>
-                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.2)' }}>
-                      <span style={{ fontSize: '11px', color: '#854d0e', fontWeight: 600 }}>📚 Нийт дурсамж</span>
-                      <strong style={{ display: 'block', fontSize: '20px', color: '#1e293b', marginTop: '2px' }}>{memories?.total ?? 0}</strong>
+                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--ui-warning-bg)', border: '1px solid var(--ui-warning-border)' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--ui-warning-text)', fontWeight: 600 }}>📚 Нийт дурсамж</span>
+                      <strong style={{ display: 'block', fontSize: '20px', color: 'var(--ui-text)', marginTop: '2px' }}>{memories?.total ?? 0}</strong>
                     </div>
-                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                      <span style={{ fontSize: '11px', color: '#065f46', fontWeight: 600 }}>✨ Таны нэмсэн</span>
-                      <strong style={{ display: 'block', fontSize: '20px', color: '#1e293b', marginTop: '2px' }}>{myCount}</strong>
+                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--ui-success-bg)', border: '1px solid var(--ui-success-border)' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--ui-success-text)', fontWeight: 600 }}>✨ Таны нэмсэн</span>
+                      <strong style={{ display: 'block', fontSize: '20px', color: 'var(--ui-text)', marginTop: '2px' }}>{myCount}</strong>
                     </div>
-                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(14, 165, 233, 0.08)', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
-                      <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: 600 }}>📸 Нийт зураг</span>
-                      <strong style={{ display: 'block', fontSize: '20px', color: '#1e293b', marginTop: '2px' }}>{totalPhotos}</strong>
+                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--ui-info-bg)', border: '1px solid var(--ui-info-border)' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--ui-info-text)', fontWeight: 600 }}>📸 Нийт зураг</span>
+                      <strong style={{ display: 'block', fontSize: '20px', color: 'var(--ui-text)', marginTop: '2px' }}>{totalPhotos}</strong>
                     </div>
-                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
-                      <span style={{ fontSize: '11px', color: '#5b21b6', fontWeight: 600 }}>👤 Таглагдсан хүмүүс</span>
-                      <strong style={{ display: 'block', fontSize: '20px', color: '#1e293b', marginTop: '2px' }}>{totalPeopleTagged}</strong>
+                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--ui-accent-soft)', border: '1px solid var(--ui-accent-border)' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--ui-accent-text)', fontWeight: 600 }}>👤 Таглагдсан хүмүүс</span>
+                      <strong style={{ display: 'block', fontSize: '20px', color: 'var(--ui-text)', marginTop: '2px' }}>{totalPeopleTagged}</strong>
                     </div>
                   </div>
 
                   {/* Filter and Search Bar */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '14px 18px', background: 'var(--app-card-bg, #ffffff)', border: '1.5px solid var(--app-border, #e2d9c8)', borderRadius: '14px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '14px 18px', background: 'var(--ui-surface)', border: '1.5px solid var(--ui-border)', borderRadius: '14px' }}>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <button
                         type="button"
@@ -572,9 +572,9 @@ function MemoriesPageContent() {
                           fontWeight: 700,
                           cursor: 'pointer',
                           border: '1.5px solid',
-                          borderColor: ownershipFilter === 'all' ? '#d97706' : '#cbd5e1',
+                          borderColor: ownershipFilter === 'all' ? '#d97706' : 'var(--ui-border-strong)',
                           background: ownershipFilter === 'all' ? '#d97706' : 'transparent',
-                          color: ownershipFilter === 'all' ? '#ffffff' : '#475569',
+                          color: ownershipFilter === 'all' ? '#ffffff' : 'var(--ui-text-secondary)',
                           transition: 'all 0.15s ease',
                         }}
                       >
@@ -590,9 +590,9 @@ function MemoriesPageContent() {
                           fontWeight: 700,
                           cursor: 'pointer',
                           border: '1.5px solid',
-                          borderColor: ownershipFilter === 'mine' ? '#16a34a' : '#cbd5e1',
+                          borderColor: ownershipFilter === 'mine' ? '#16a34a' : 'var(--ui-border-strong)',
                           background: ownershipFilter === 'mine' ? '#16a34a' : 'transparent',
-                          color: ownershipFilter === 'mine' ? '#ffffff' : '#475569',
+                          color: ownershipFilter === 'mine' ? '#ffffff' : 'var(--ui-text-secondary)',
                           transition: 'all 0.15s ease',
                         }}
                       >
@@ -608,9 +608,9 @@ function MemoriesPageContent() {
                           fontWeight: 700,
                           cursor: 'pointer',
                           border: '1.5px solid',
-                          borderColor: ownershipFilter === 'others' ? '#64748b' : '#cbd5e1',
+                          borderColor: ownershipFilter === 'others' ? '#64748b' : 'var(--ui-border-strong)',
                           background: ownershipFilter === 'others' ? '#64748b' : 'transparent',
-                          color: ownershipFilter === 'others' ? '#ffffff' : '#475569',
+                          color: ownershipFilter === 'others' ? '#ffffff' : 'var(--ui-text-secondary)',
                           transition: 'all 0.15s ease',
                         }}
                       >
@@ -624,17 +624,8 @@ function MemoriesPageContent() {
                         value={searchFilter}
                         onChange={(e) => setSearchFilter(e.target.value)}
                         placeholder="Дурсамж, тайлбар, нэрээр шүүх…"
-                        style={{
-                          width: '100%',
-                          height: '38px',
-                          padding: '0 14px',
-                          borderRadius: '10px',
-                          border: '1.5px solid #cbd5e1',
-                          fontSize: '12.5px',
-                          outline: 'none',
-                          background: '#ffffff',
-                          color: '#0f172a',
-                        }}
+                        className="ui-input"
+                        style={{ height: '38px', padding: '0 14px', fontSize: '12.5px' }}
                       />
                     </div>
                   </div>
@@ -720,9 +711,9 @@ function MemoriesPageContent() {
                                 gap: '5px',
                                 padding: '6px 12px',
                                 borderRadius: '999px',
-                                border: memory.liked_by_me ? '1.5px solid #e11d48' : '1px solid #e2d9c8',
-                                background: memory.liked_by_me ? 'rgba(225, 29, 72, 0.12)' : '#fcfaf5',
-                                color: memory.liked_by_me ? '#be123c' : '#475569',
+                                border: memory.liked_by_me ? '1.5px solid #e11d48' : '1px solid var(--ui-border)',
+                                background: memory.liked_by_me ? 'rgba(225, 29, 72, 0.14)' : 'var(--ui-surface-subtle)',
+                                color: memory.liked_by_me ? '#e11d48' : 'var(--ui-text-secondary)',
                                 fontSize: '12px',
                                 fontWeight: 700,
                                 cursor: 'pointer',
@@ -743,9 +734,9 @@ function MemoriesPageContent() {
                                 gap: '5px',
                                 padding: '6px 11px',
                                 borderRadius: '999px',
-                                border: '1px solid #e2d9c8',
-                                background: '#fcfaf5',
-                                color: '#475569',
+                                border: '1px solid var(--ui-border)',
+                                background: 'var(--ui-surface-subtle)',
+                                color: 'var(--ui-text-secondary)',
                                 fontSize: '12px',
                                 fontWeight: 600,
                                 textDecoration: 'none',
@@ -762,7 +753,7 @@ function MemoriesPageContent() {
                             {memory.can_edit && (
                               <Link
                                 href={`/memories/${memory.id}?family=${encodeURIComponent(familyId)}`}
-                                style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700, borderRadius: '8px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', textDecoration: 'none' }}
+                                style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700, borderRadius: '8px', background: 'var(--ui-warning-bg)', color: 'var(--ui-warning-text)', border: '1px solid var(--ui-warning-border)', textDecoration: 'none' }}
                               >
                                 ✏️ Засах
                               </Link>

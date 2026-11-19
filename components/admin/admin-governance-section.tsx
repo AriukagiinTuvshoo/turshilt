@@ -101,7 +101,7 @@ export function AdminGovernanceSection({
             <h3 className="admin-card-subtitle" style={{ marginBottom: 4 }}>
               Ургийн Батламж үүсгэх
             </h3>
-            <p style={{ fontSize: 12.5, color: 'var(--ink-secondary, #485c53)', margin: 0 }}>
+            <p className="admin-muted-text" style={{ margin: 0 }}>
               Уламжлалт хэв маяг, тамга бүхий дурсгалын батламж үүсгэж хэвлэх эсвэл PDF татаж авна.
             </p>
           </div>
@@ -152,7 +152,7 @@ export function AdminGovernanceSection({
               ))}
             </div>
           ) : (
-            <p style={{ fontSize: 12, color: '#74857b' }}>Одоогоор нийтлэгдсэн түүх алга.</p>
+            <p className="admin-muted-text">Одоогоор нийтлэгдсэн түүх алга.</p>
           )}
         </div>
 
@@ -195,7 +195,7 @@ export function AdminGovernanceSection({
               ))}
             </div>
           ) : (
-            <p style={{ fontSize: 12, color: '#74857b' }}>Одоогоор хадгалсан дурсамж алга.</p>
+            <p className="admin-muted-text">Одоогоор хадгалсан дурсамж алга.</p>
           )}
         </div>
       </div>
@@ -251,10 +251,10 @@ export function AdminGovernanceSection({
 
         {isOwner && (
           <div className="admin-danger-box">
-            <h4 style={{ fontSize: 14, fontWeight: 700, color: '#dc2626', margin: '0 0 6px' }}>
+            <h4 className="admin-danger-heading">
               Аюултай бүс: Гэр бүлийг архивлах
             </h4>
-            <p style={{ fontSize: 12, color: 'var(--ink-secondary, #485c53)', margin: '0 0 14px' }}>
+            <p style={{ fontSize: 12, color: 'var(--ui-text-secondary)', margin: '0 0 14px' }}>
               Гэр бүлийг архивласнаар идэвхтэй жагсаалтаас гарах бөгөөд зөвхөн сэргээх замаар ашиглана.
             </p>
             <button
@@ -394,15 +394,7 @@ export function AdminGovernanceSection({
                         >
                           {log.action}
                         </span>
-                        <span
-                          style={{
-                            fontSize: 10.5,
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            background: '#f1f5f9',
-                            color: '#475569',
-                          }}
-                        >
+                        <span className="admin-pill-neutral">
                           Төрөл: {log.target_type}
                         </span>
                       </div>
@@ -427,7 +419,7 @@ export function AdminGovernanceSection({
             })}
           </div>
         ) : (
-          <p style={{ fontSize: 13, color: '#74857b', padding: '16px 0' }}>
+          <p className="admin-muted-text" style={{ padding: '16px 0' }}>
             {auditSearch
               ? 'Хайлтад тохирох үйлдэл олдсонгүй.'
               : 'Одоогоор бүртгэгдсэн үйлдлийн түүх байхгүй байна.'}

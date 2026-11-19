@@ -180,5 +180,14 @@ test.describe('Guulingiinhan Core E2E User Journey', () => {
     await expect(page.locator('body')).toContainText('Ургийн Сан & Уулзалт, Цугларалт');
     await page.getByRole('button', { name: /Уулзалт & Арга хэмжээ/i }).click();
     await expect(page.locator('body')).toContainText('Ургийн уулзалт, арга хэмжээ зарлах');
+
+    // 9. Verify Obsidian dark theme persists with zero-FOUC on reload and dark surface color
+    await page.evaluate(() => localStorage.setItem('guulin-theme', 'obsidian'));
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'obsidian');
+    const surfaceBg = await page.locator('main.people-page').evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(surfaceBg).toBe('rgb(11, 15, 25)');
+    const cardBg = await page.locator('.activities-public-section').evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(cardBg).toBe('rgb(30, 41, 59)');
   });
 });
