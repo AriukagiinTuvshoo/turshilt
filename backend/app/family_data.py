@@ -2,17 +2,19 @@
 
 import json
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
+from app.config import get_settings
 from app.db import get_db
+from app.maintenance import prune_expired_trash
 from app.models import (
     ArchivePerson,
     Biography,
@@ -57,13 +59,10 @@ def list_family_trash(
 ):
     _member(db, family_id, user, {"owner", "editor"})
 
-    # Auto-prune trash records older than 30 days
-    cutoff = datetime.now(UTC) - timedelta(days=30)
-    db.execute(
-        delete(FamilyTrashRecord).where(
-            FamilyTrashRecord.family_id == family_id,
-            FamilyTrashRecord.deleted_at < cutoff,
-        )
+    prune_expired_trash(
+        db,
+        family_id=family_id,
+        retention_days=get_settings().trash_retention_days,
     )
     db.commit()
 

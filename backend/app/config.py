@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     slow_request_threshold_ms: int = 1000
     photo_cleanup_max_attempts: int = 8
+    trash_retention_days: int = 30
     cors_origins: str = "http://localhost:3000"
     session_cookie_name: str = "guulingiinhan_session"
     storage_provider: str = "local"
@@ -77,6 +78,8 @@ class Settings(BaseSettings):
             raise ValueError("SLOW_REQUEST_THRESHOLD_MS must be between 1 and 120000.")
         if not 1 <= self.photo_cleanup_max_attempts <= 20:
             raise ValueError("PHOTO_CLEANUP_MAX_ATTEMPTS must be between 1 and 20.")
+        if not 1 <= self.trash_retention_days <= 365:
+            raise ValueError("TRASH_RETENTION_DAYS must be between 1 and 365.")
         if self.email_provider.lower() not in {"fake", "smtp"}:
             raise ValueError("EMAIL_PROVIDER must be fake or smtp.")
         if self.email_verification_ttl_seconds < 300 or self.email_verification_ttl_seconds > 86400:
@@ -128,7 +131,7 @@ class Settings(BaseSettings):
                     raise ValueError(
                         "Production Google OIDC requires GOOGLE_OIDC_STATE_SECRET with at least 32 characters."
                     )
-        elif self.sms_provider.lower() not in {"fake", "twilio"}:
+        if self.sms_provider.lower() not in {"fake", "twilio"}:
             raise ValueError("SMS_PROVIDER must be fake or twilio.")
         if self.storage_provider.lower() not in {"local", "s3"}:
             raise ValueError("STORAGE_PROVIDER must be local or s3.")

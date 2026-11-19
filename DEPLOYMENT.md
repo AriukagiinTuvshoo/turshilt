@@ -1,66 +1,120 @@
-# Байршуулалтын суурь
+# Гуулингийнхан — Production Байршуулалт ба Ашиглалтын Гарын Авлага
 
-Google login асаахдаа backend-д `GOOGLE_OIDC_ENABLED=true`, `GOOGLE_OIDC_CLIENT_ID`, `GOOGLE_OIDC_CLIENT_SECRET`, `GOOGLE_OIDC_REDIRECT_URI`, `GOOGLE_OIDC_STATE_SECRET` тохируул. Google Cloud OAuth client-ийн authorized redirect URI нь яг `https://<api-host>/api/v1/auth/google/callback` байна. State secret-ийг `openssl rand -hex 32`-оор үүсгэж secret manager-д хадгал; frontend-д client secret/state secret дамжуулахгүй. Google credentials байхгүй CI болон development-д OIDC унтраалттай байж болно.
+Энэхүү гарын авлага нь **Гуулингийнхан** төслийг орон нутгийн хөгжүүлэлт болон **Production** орчинд аюулгүй, тасралтгүй байршуулах бүх алхмыг тодорхойлно.
 
-## Орон нутаг
+---
 
-Root `.env` дахь `POSTGRES_PASSWORD`-ийг өөрчилсний дараа `docker compose up --build` ажиллуулна. API: `http://localhost:8000`; OpenAPI: `/docs`; health: `/health`.
+## 1. Орон нутгийн хөгжүүлэлт (Docker / Local)
 
-## Production-д бэлэн болохын өмнө
+```bash
+# Орон нутгийн PostgreSQL + FastAPI эхлүүлэх
+docker compose up --build
+```
 
-1. Managed PostgreSQL үүсгэж нууц үг, TLS connection string тохируулна.
-2. API болон frontend-ийн origin тус бүрийг CORS-д заана.
-3. `EMAIL_PROVIDER=smtp`, HTTPS `EMAIL_PUBLIC_BASE_URL`, `EMAIL_FROM`, SMTP host/username/password болон STARTTLS тохируулна. Fake provider production-д эхлүүлэх үед configuration error өгнө.
-4. Private object storage, хугацаатай signed URL, upload хэмжээ/төрлийн шалгалт нэмнэ.
-5. CI дээр tests, migrations, build ажиллуулна.
-6. Managed PostgreSQL болон object storage backup/versioning тохируулж, тусгаарласан staging орчинд restore туршилт хийж бүртгэнэ. Одоогийн repository-д backup job тохируулаагүй тул production өгөгдөл нэмэхээс өмнө энэ ажил заавал хийгдэнэ.
-7. Vercel-ийн `NEXT_PUBLIC_API_BASE_URL` болон backend-ийн `CORS_ORIGINS`-ийг preview/staging домэйнээр тохируулж шалгана.
-8. Email verification, password reset, invitation SMTP хүргэлт болон bounce/error мониторингийг staging-д баталгаажуулна.
-9. Migration-ийг эхлээд CI/staging PostgreSQL дээр upgrade, downgrade, дахин upgrade-аар шалгана. Одоогийн downgrade нь auth/session/invitation/throttle/audit өгөгдлийг устгадаг тул production rollback-д ашиглахгүй; forward-fix migration ба backup/restore төлөвлөгөө хэрэглэнэ.
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000` · OpenAPI: `/docs`
+- Эрүүл мэндийн цэгүүд: `/health`, `/ready`, `/health/ready`
 
-### Утасны OTP тохиргоо (P4.4)
+---
 
-Backend орчинд `OTP_HASH_SECRET`-ийг `openssl rand -hex 32`-оор үүсгээд secret manager-д хадгал. Production-д `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` тохируулах шаардлагатай; нэг утгыг frontend env рүү бүү дамжуул. OTP secret болон Twilio credential дутуу үед production тохиргоо API-г эхлүүлэхгүй. Development-ийн `SMS_PROVIDER=fake` мессеж илгээхгүй.
+## 2. Production орчны заавал шаардлагатай тохиргоонууд
 
-Email verification болон password recovery нь SMTP тохируулсан үед идэвхжинэ. Локал development-д `EMAIL_PROVIDER=fake` нь хүргэлтийг network-д гаргахгүй. Invitation raw token response-д гарахгүй тул бодит хүргэлтэд SMTP provider шаардлагатай.
+`APP_ENV=production` үед [backend/app/config.py](backend/app/config.py) дараах нөхцөлийг хатуу шалгаж, дутуу бол серверийг эхлүүлэлгүй шууд зогсооно:
 
-`docker-compose.yml` нь development-д зориулагдсан бөгөөд API/DB портууд зөвхөн localhost дээр нээгдэнэ; production нууц үг, network, backup бодлого орлоход зориулагдаагүй.
+| Бүрэлдэхүүн | Заавал шаардах хувьсагчид | Тэмдэглэл |
+| :--- | :--- | :--- |
+| **PostgreSQL 16** | `DATABASE_URL=postgresql+psycopg://...` | SQLite зөвшөөрөхгүй. Connection pool-ийг `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`-аар тохируулна. |
+| **CORS & HTTPS** | `CORS_ORIGINS=https://taны-домайн.mn` | `*` болон `http://` origin хориотой (`Secure; HttpOnly; SameSite=None` cookie тул). |
+| **Cloudflare R2 / S3** | `STORAGE_PROVIDER=s3`, `STORAGE_ENDPOINT` (`https://...`), `STORAGE_BUCKET`, `STORAGE_REGION=auto`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | R2 endpoint нь `https://<account_id>.r2.cloudflarestorage.com` хэлбэртэй байна. |
+| **Имэйл (SMTP)** | `EMAIL_PROVIDER=smtp`, `EMAIL_FROM`, `EMAIL_PUBLIC_BASE_URL=https://...`, `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT=587`, `EMAIL_SMTP_USERNAME`, `EMAIL_SMTP_PASSWORD`, `EMAIL_SMTP_STARTTLS=true` | `STARTTLS` заавал идэвхтэй байна. |
+| **Утасны OTP (Twilio)** | `OTP_HASH_SECRET` (`openssl rand -hex 32`), `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | Хөгжүүлэлтийн `fake` горим production-д ажиллахгүй. |
+| **Google OIDC (Сонголт)** | `GOOGLE_OIDC_ENABLED=true`, `GOOGLE_OIDC_CLIENT_ID`, `GOOGLE_OIDC_CLIENT_SECRET`, `GOOGLE_OIDC_REDIRECT_URI=https://.../api/v1/auth/google/callback`, `GOOGLE_OIDC_STATE_SECRET` (32+ тэмдэгт) | Google Cloud Console дээр callback URI яг таарсан байна. |
+| **Хогийн сав хадгалалт** | `TRASH_RETENTION_DAYS=30` | Устгагдсан бүртгэлийг хэдэн хоног хадгалах хугацаа (`1..365`). |
 
-Backend-ийн container root бус хэрэглэгчээр ажиллана. `/health` нь liveness, `/health/ready` нь PostgreSQL холболтын readiness шалгалт. Production deployment нь readiness probe-оо `/health/ready` рүү чиглүүлнэ.
+---
 
-### Ажиглалт ба холбоосын найдвартай байдал (P4.11)
+## 3. Deploy хийхийн өмнөх бэлэн байдлын шалгалт (Pre-Flight Check)
 
-API JSON log гаргаж, серверийн `X-Request-ID` хүсэлтийн response/log хооронд хадгална. Log aggregation-д зөвхөн stdout-г ав; request body болон URL query-г proxy/APM талд бүртгэхгүй. `LOG_LEVEL`, `SLOW_REQUEST_THRESHOLD_MS` тохируулж болно. HTTP 429, удаан хүсэлт, DB/storage алдааны event-үүдийг `event`/`error_code` талбараар alert-д холбо.
+Нууц утгуудыг лог руу хэвлэлгүйгээр тохиргоо, PostgreSQL болон S3/R2 холболтыг урьдчилан шалгах комманд:
 
-Managed PostgreSQL-ийн connection limit-ийг мэдсэний дараа `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_TIMEOUT_SECONDS`, `DB_POOL_RECYCLE_SECONDS`, `DB_CONNECT_TIMEOUT_SECONDS`-г тухайн үйлчилгээний replica тоотой хамт тохируул. Эхний утгууд тохируулгын эхлэл болохоос production орчинд туршсан тоо биш. SQL query-д автомат дахин оролдлого хийхгүй.
+```bash
+cd backend
 
-SMTP, SMS болон Google OIDC timeout 8 секунд; S3 connection/read timeout 3/10 секунд, SDK retry хязгаарлагдсан. Database connect timeout нь env-ээр тохирно. Query/statement timeout идэвхжүүлээгүй тул шаардлагатай бол managed DB болон driver дээр workload-д тааруулж тохируул.
+# 1. Зөвхөн env файлын бүх дүрмийг шалгах
+uv run python scripts/check_production_config.py --env-file .env.production
 
-Фото cleanup нь анхдагчаар 8 хүртэл оролдлого хийдэг (`PHOTO_CLEANUP_MAX_ATTEMPTS`, дээд 20). Limit хүрсэн tombstone автоматаар арилгахгүй, hidden үлдэнэ; лог дахь `photo_cleanup_exhausted`-ээр олж operator runbook-аар гараар оношлоно. Production alert, log aggregation болон гар ажиллагааны сэргээх алхмууд одоогоор тохируулаагүй.
+# 2. Live PostgreSQL + Cloudflare R2 / S3 холболтыг хамт шалгах
+uv run python scripts/check_production_config.py --env-file .env.production --check-db --check-storage
+```
 
-**Backup төлөв:** Managed PostgreSQL backup — NOT CONFIGURED; object storage backup/versioning — NOT CONFIGURED; restore test — NOT TESTED. Production нээлтээс өмнө тус бүрийг тохируулж, сэргээх туршилтын үр дүнг бүртгэ.
+JSON гаралт шаардлагатай бол `--json` нэмнэ. Амжилттай бол `exit code 0` буцаана.
 
-Restore runbook: (1) managed PostgreSQL snapshot-ийг тусгаарласан instance руу сэргээ; (2) `alembic current` болон `alembic upgrade head`-ээр schema-г шалга; (3) object storage-ийн versioned backup-ийг тусгаарласан bucket руу сэргээ; (4) DB-ийн `photos.object_key` болон `thumbnail_object_key`-г сэргэсэн объектуудтай тулган, алга болсон/илүү object-ийг тайлагна; (5) `/health/ready`, нэвтрэлт, family access, private photo upload/read smoke test ажиллуул; (6) үр дүн, хугацаа, зөрүүг бүртгэ. Энэ runbook нь одоогоор төлөвлөгөө бөгөөд бодит restore туршигдаагүй.
+---
 
-Auth cookie production-д `Secure; HttpOnly; SameSite=None` тул HTTPS frontend/backend болон зөв CORS origin шаардлагатай. Vercel-ийн бодит deployment энэ phase-д хийгдээгүй; provider project/environment variables шалгах эрх ба тохиргоо баталгаажаагүй.
+## 4. Эрүүл мэндийн шалгалт (`/health`, `/ready`, `/health/ready`)
 
-## Production auth deployment gate
+- `GET /health` → Процесс амьд эсэхийг шалгана (**Liveness probe** — `200 {"status": "ok"}`).
+- `GET /ready` болон `GET /health/ready` → PostgreSQL холболтыг `SELECT 1`-ээр шалгана (**Readiness probe** — хэвийн бол `200`, DB унасан бол `503 DATABASE_UNAVAILABLE`). Load balancer / Kubernetes / Railway / Render бүгд `/ready` эсвэл `/health/ready` хаяг руу чиглүүлнэ.
 
-Frontend and backend are separate Vercel projects in this repository's current GitHub integration:
-- frontend project: `guulingiinhan-jy19`
-- backend project: `guulingiinhan` with root directory `backend`
+---
 
-Before a production frontend deployment, `NEXT_PUBLIC_API_BASE_URL` is mandatory. The frontend now fails the production build when it is missing instead of silently defaulting browser auth requests to `localhost:8000`.
+## 5. Production-д байршуулах аргууд
 
-The frontend's `NEXT_PUBLIC_API_BASE_URL` must point to the deployed backend API base ending in `/api/v1`. The backend `CORS_ORIGINS` must explicitly include the actual HTTPS frontend origin. Backend production settings must also satisfy the existing PostgreSQL, OTP/Twilio, SMTP, HTTPS email-base, and S3-compatible storage validation.
+### Сонголт А: Нэг сервер дээр Docker Compose (`docker-compose.prod.yml`)
 
-After configuration, verify:
-1. frontend build succeeds without a localhost fallback;
-2. `GET /health` returns 200;
-3. `GET /health/ready` returns 200 with `database=ok`;
-4. email registration returns 201 and sends verification mail;
-5. verified email login returns 200 and `GET /api/v1/auth/me` remains authenticated after refresh;
-6. phone registration/login returns 200 after OTP and persists the session;
-7. logout returns 204 and protected routes return 401 afterward.
+```bash
+# 1. Тохиргооны файлуудыг бэлтгэх
+cp .env.production.example .env
+cp backend/.env.example backend/.env.production
+# -> .env болон backend/.env.production доторх бодит нууц үг, R2, SMTP, Twilio утгуудыг бөглөнө
 
-Do not put API secrets, SMTP credentials, Twilio credentials, database credentials, or auth secrets in `NEXT_PUBLIC_*` variables.
+# 2. Тохиргоог урьдчилан шалгах
+cd backend && uv run python scripts/check_production_config.py --env-file .env.production && cd ..
+
+# 3. db + api (auto alembic migration) + web (Next.js standalone) + maintenance (өдөр бүрийн cron) асаах
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Reverse proxy (Nginx / Caddy / Cloudflare Tunnel) нь `https://taны-домайн.mn` → `127.0.0.1:3000`, `https://api.taны-домайн.mn` → `127.0.0.1:8000` руу чиглүүлнэ.
+
+### Сонголт Б: Vercel (Frontend) + Railway / Render (Backend + Postgres)
+
+1. **Frontend (Vercel)**: Root directory `.` — заавал `NEXT_PUBLIC_API_BASE_URL=https://api.taны-домайн.mn/api/v1` тохируулна (`scripts/verify-production-env.mjs` шалгана).
+2. **Backend (Railway / Render)**: `backend/Dockerfile`-ийг ашиглан deploy хийнэ (`alembic upgrade head` автоматаар ажиллана). Readiness probe-ийг `/ready` болгоно.
+
+---
+
+## 6. Хогийн савны 30 хоногийн автомат цэвэрлэгч ба Арын засвар үйлчилгээ (Maintenance CLI / Cron)
+
+[`backend/app/maintenance.py`](backend/app/maintenance.py) нь дараах 4 цэвэрлэгээг нэг transaction-аар гүйцэтгэнэ:
+1. `TRASH_RETENTION_DAYS` (анхдагчаар 30 хоног)-оос хэтэрсэн `FamilyTrashRecord` бүртгэлийг устгаж, ямар ч гэр бүл/хэрэглэгчтэй холбогдоогүй өнчин (`orphan`) `Person` мөрүүдийг цэвэрлэнэ.
+2. Хугацаа дууссан `UserSession`, `EmailVerificationToken`, `PasswordResetToken` болон 24+ цаг хэтэрсэн `PhoneOtpChallenge` мөрүүдийг устгана.
+3. Бүх гэр бүлийн `deletion_pending` эсвэл 15 минутаас удсан `uploading` зургуудыг Object Storage-аас цэвэрлэнэ.
+
+### Гар ажиллагаа ба Dry-Run тест
+
+```bash
+cd backend
+
+# Устгах зүйлсийг устгалгүйгээр зөвхөн тоолж харах (Dry-Run)
+uv run python scripts/run_maintenance.py --dry-run --json
+
+# Бодитоор гүйцэтгэх
+uv run python scripts/run_maintenance.py --json
+```
+
+### Автомат хуваарь (Cron) тохируулах
+- **Docker Compose Prod**: `maintenance` сервис автоматаар 24 цаг тутам ажиллана.
+- **Linux Cron** (өдөр бүрийн 03:00 цагт):
+  ```cron
+  0 3 * * * cd /srv/guulin/backend && uv run python scripts/run_maintenance.py --json >> /var/log/guulin-maintenance.log 2>&1
+  ```
+- **Railway / Render Cron Job**: Өдрийн 1 удаа `uv run python scripts/run_maintenance.py --json` комманд өгнө.
+
+---
+
+## 7. Нөөцлөлт (Backup) ба Сэргээлт (Restore Runbook)
+
+1. **Managed PostgreSQL** дээр өдөр тутмын snapshot, **Cloudflare R2 / S3** bucket дээр Object Versioning идэвхжүүлнэ.
+2. **Migration дүрэм**: Production орчинд schema ухраах (`alembic downgrade`) хийхгүй; алдаа гарвал forward-fix migration эсвэл DB snapshot-аас сэргээнэ.
+3. **Сэргээлт шалгах дараалал**: Snapshot сэргээх → `alembic current && alembic upgrade head` → `GET /ready` `200` → нэвтрэлт + гэр бүлийн мод + хувийн зураг унших smoke test хийж баталгаажуулна.

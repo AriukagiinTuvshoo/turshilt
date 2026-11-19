@@ -185,3 +185,9 @@ def readiness(request: Request):
                      "request_id": request.state.request_id},
         )
     return {"status": "ok", "service": "guulingiinhan-api", "database": "ok"}
+
+
+@app.get("/ready", tags=["system"])
+def ready_alias(request: Request):
+    """Readiness probe alias pointing to /health/ready."""
+    return readiness(request)

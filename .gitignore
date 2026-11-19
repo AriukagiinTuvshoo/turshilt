@@ -3,6 +3,12 @@ dist/
 .next/
 next-env.d.ts
 .env
+.env.*
+!.env.example
+!.env.production.example
+backend/.env
+backend/.env.*
+!backend/.env.example
 .venv/
 backend/.venv/
 backend/*.db
@@ -24,5 +30,7 @@ backend/*.egg-info/
 tsconfig.tsbuildinfo
 backend/media/
 backend/storage/
+backend/uploads/
+uploads/
 playwright-report/
 test-results/
