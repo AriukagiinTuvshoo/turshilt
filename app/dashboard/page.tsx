@@ -2,13 +2,16 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertCircle,
   Archive,
   ArrowRight,
   BookOpen,
   Calendar,
+  CalendarHeart,
   GitFork,
   Heart,
   Search,
+  Sparkles,
   TreeDeciduous,
   Users,
   X,
@@ -31,6 +34,7 @@ import {
   personName,
 } from '../../lib/api';
 import { getUpcomingFamilyReminders } from '../../lib/duplicates';
+import { PedigreeWizardModal, RelativeRole } from '../../components/pedigree-wizard-modal';
 
 type TreeNode = {
   id: string;
@@ -338,6 +342,10 @@ function DashboardContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardAnchorId, setWizardAnchorId] = useState<string | null>(null);
+  const [wizardRole, setWizardRole] = useState<RelativeRole>('father');
+  const [wizardMode, setWizardMode] = useState<'create' | 'existing'>('existing');
   const dashboardRequestRef = useRef(0);
   const searchRequestRef = useRef(0);
 
@@ -524,6 +532,23 @@ function DashboardContent() {
     () => getUpcomingFamilyReminders(people, new Date(), 60),
     [people],
   );
+
+  // Pedigree Integrity Advisor: find people disconnected from any parent/child/marriage or missing birth year
+  const integritySuggestions = useMemo(() => {
+    const connectedIds = new Set<string>();
+    for (const edge of tree.parent_child_relationships) {
+      connectedIds.add(edge.parent_id);
+      connectedIds.add(edge.child_id);
+    }
+    for (const m of tree.marriages) {
+      connectedIds.add(m.person_1_id);
+      connectedIds.add(m.person_2_id);
+    }
+    const unlinkedPeople =
+      people.length > 1 ? people.filter((p) => !connectedIds.has(p.id)) : [];
+    const missingBirthDatePeople = people.filter((p) => !p.birth_date);
+    return { unlinkedPeople, missingBirthDatePeople };
+  }, [people, tree.parent_child_relationships, tree.marriages]);
 
   const activity = useMemo<ActivityItem[]>(() => {
     const result: ActivityItem[] = [];
@@ -745,6 +770,7 @@ function DashboardContent() {
                 <QuickAction icon={BookOpen} label="Манай түүх" description="Түүх, үйл явдлууд" href={'/stories?family=' + encodeURIComponent(family?.id ?? '')} />
                 <QuickAction icon={Heart} label="Дурсамж" description="Гэр бүлийн дурсамж" href={'/memories?family=' + encodeURIComponent(family?.id ?? '')} />
                 <QuickAction icon={Archive} label="Архив" description="Баримтын metadata" href={'/archives?family=' + encodeURIComponent(family?.id ?? '')} />
+                <QuickAction icon={CalendarHeart} label="Ургийн сан & Уулзалт" description="Хамтын сан, арга хэмжээ" href={'/activities?family=' + encodeURIComponent(family?.id ?? '')} />
               </div>
             </div>
 
@@ -798,6 +824,84 @@ function DashboardContent() {
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {(integritySuggestions.unlinkedPeople.length > 0 ||
+                integritySuggestions.missingBirthDatePeople.length > 0) && (
+                <div
+                  style={{
+                    marginTop: '16px',
+                    paddingTop: '14px',
+                    borderTop: '1px solid var(--parchment-border, #e2d9c8)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      marginBottom: '8px',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#b45309',
+                    }}
+                  >
+                    <Sparkles size={14} /> Ургийн модны бүрэн бүтэн байдлын зөвлөх
+                  </div>
+
+                  {integritySuggestions.unlinkedPeople.length > 0 && (
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        background: 'rgba(217, 119, 6, 0.08)',
+                        border: '1px solid rgba(217, 119, 6, 0.25)',
+                        marginBottom: '8px',
+                      }}
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#92400e', marginBottom: '6px' }}>
+                        <AlertCircle size={13} style={{ display: 'inline', marginRight: '5px' }} />
+                        Ургийн модонд холбогдоогүй {integritySuggestions.unlinkedPeople.length} салангид хүн байна:
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {integritySuggestions.unlinkedPeople.slice(0, 5).map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              setWizardAnchorId(p.id);
+                              setWizardRole('father');
+                              setWizardMode('existing');
+                              setWizardOpen(true);
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              padding: '4px 10px',
+                              borderRadius: '999px',
+                              border: '1px solid #d97706',
+                              background: '#ffffff',
+                              color: '#92400e',
+                              fontSize: '11.5px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                            title="Энэ хүнийг модон дахь эцэг эх, хүүхэд, ханьтай нь шууд холбох"
+                          >
+                            🔗 {fullName(p)} — Модонд холбох
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {integritySuggestions.missingBirthDatePeople.length > 0 && (
+                    <div style={{ fontSize: '11.5px', color: '#57685e' }}>
+                      📅 Төрсөн он бүртгэгдээгүй <strong>{integritySuggestions.missingBirthDatePeople.length}</strong> гишүүн байна. Профайл руу нь орж төрсөн оныг нь нэмбэл тэмдэглэлт өдрийн сануулгад орно.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -916,6 +1020,27 @@ function DashboardContent() {
           )}
 
           {refreshing && <div className="homev2-refresh" role="status">Шинэчилж байна…</div>}
+
+          {family && (
+            <PedigreeWizardModal
+              isOpen={wizardOpen}
+              onClose={() => setWizardOpen(false)}
+              familyId={family.id}
+              people={people}
+              marriages={tree.marriages}
+              parentChildEdges={tree.parent_child_relationships}
+              initialAnchorPersonId={wizardAnchorId}
+              initialRole={wizardRole}
+              initialMode={wizardMode}
+              onSuccess={async (_person, msg) => {
+                setWizardOpen(false);
+                setNotice(msg);
+                if (user) {
+                  await loadDashboard(family.id, user);
+                }
+              }}
+            />
+          )}
         </main>
       </div>
     </div>

@@ -15,6 +15,8 @@ from app.config import get_settings
 from app.db import engine
 from app.families import invitations_router, lineages_router
 from app.families import router as families_router
+from app.family_activities import public_funds_router
+from app.family_activities import router as family_activities_router
 from app.invitation_preview import router as invitation_preview_router
 from app.memory_photos import router as memory_photos_router
 from app.observability import configure_logging, error_classification, request_id_context
@@ -154,6 +156,8 @@ app.include_router(families_router, prefix="/api/v1")
 app.include_router(lineages_router, prefix="/api/v1")
 app.include_router(invitations_router, prefix="/api/v1")
 app.include_router(invitation_preview_router, prefix="/api/v1")
+app.include_router(family_activities_router, prefix="/api/v1")
+app.include_router(public_funds_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["system"])

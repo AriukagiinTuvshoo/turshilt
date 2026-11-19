@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Archive,
   BookOpen,
+  CalendarHeart,
   GitFork,
   Globe2,
   Home,
@@ -25,7 +26,7 @@ import { ThemePicker } from './theme-picker';
 import { FamilyChatDrawer } from './family-chat-drawer';
 
 type NavItem = {
-  key: 'dashboard' | 'tree' | 'people' | 'stories' | 'memories' | 'archives' | 'chat' | 'admin' | 'settings';
+  key: 'dashboard' | 'tree' | 'people' | 'stories' | 'memories' | 'archives' | 'activities' | 'chat' | 'admin' | 'settings';
   label: string;
   description: string;
   icon: LucideIcon;
@@ -40,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'stories', label: 'Манай түүх', description: 'Түүх, үйл явдлууд', icon: BookOpen, path: '/stories', needsFamily: true },
   { key: 'memories', label: 'Дурсамж', description: 'Хадгалсан дурсамж', icon: Globe2, path: '/memories', needsFamily: true },
   { key: 'archives', label: 'Архив', description: 'Гэр бүлийн баримт', icon: Archive, path: '/archives', needsFamily: true },
+  { key: 'activities', label: 'Сан ба Уулзалт', description: 'Ургийн сан, арга хэмжээ', icon: CalendarHeart, path: '/activities', needsFamily: true },
   { key: 'chat', label: 'Зурвас', description: 'Гэр бүлийн яриа', icon: MessageSquare, path: '/chat', needsFamily: true },
   { key: 'admin', label: 'Админ удирдлага', description: 'Гишүүд, эрх ба хамгаалалт', icon: ShieldCheck, path: '/admin', needsFamily: true },
   { key: 'settings', label: 'Тохиргоо', description: 'Account ба аюулгүй байдал', icon: Settings, path: '/settings', needsFamily: false },
@@ -57,6 +59,8 @@ function isShellRoute(pathname: string) {
     pathname.startsWith('/memories/') ||
     pathname === '/archives' ||
     pathname.startsWith('/archives/') ||
+    pathname === '/activities' ||
+    pathname.startsWith('/activities/') ||
     pathname === '/chat' ||
     pathname.startsWith('/chat/') ||
     pathname === '/settings' ||
@@ -84,6 +88,7 @@ function activeKey(pathname: string): NavItem['key'] | null {
   if (pathname === '/stories' || pathname.startsWith('/stories/')) return 'stories';
   if (pathname === '/memories' || pathname.startsWith('/memories/')) return 'memories';
   if (pathname === '/archives' || pathname.startsWith('/archives/')) return 'archives';
+  if (pathname === '/activities' || pathname.startsWith('/activities/')) return 'activities';
   if (pathname === '/chat' || pathname.startsWith('/chat/')) return 'chat';
   if (pathname === '/admin' || pathname.startsWith('/admin/') || pathname === '/families' || pathname.startsWith('/families/')) return 'admin';
   if (

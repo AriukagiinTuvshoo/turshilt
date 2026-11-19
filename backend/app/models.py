@@ -2,12 +2,15 @@ from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -860,5 +863,128 @@ class FamilyTrashRecord(Base):
     deleted_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     snapshot_data: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class FamilyFund(Base):
+    """Family-scoped fund for heritage events, book publishing, or mutual support."""
+
+    __tablename__ = "family_funds"
+    __table_args__ = (
+        CheckConstraint("visibility IN ('family', 'public')", name="ck_family_fund_visibility"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(
+        ForeignKey("families.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(180))
+    purpose: Mapped[str] = mapped_column(Text)
+    currency: Mapped[str] = mapped_column(String(3), default="MNT")
+    payment_instruction: Mapped[str] = mapped_column(Text)
+    visibility: Mapped[str] = mapped_column(
+        String(12), default="family", server_default=text("'family'")
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class Donation(Base):
+    """Donation pledge/transfer record in minor currency units."""
+
+    __tablename__ = "donations"
+    __table_args__ = (
+        CheckConstraint("amount_minor > 0", name="ck_donation_positive_amount"),
+        CheckConstraint(
+            "status IN ('pledged', 'reported', 'confirmed', 'cancelled')",
+            name="ck_donation_status",
+        ),
+        Index("ix_donation_family_created", "family_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(ForeignKey("families.id", ondelete="CASCADE"))
+    fund_id: Mapped[UUID] = mapped_column(ForeignKey("family_funds.id", ondelete="RESTRICT"))
+    donor_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    amount_minor: Mapped[int] = mapped_column(BigInteger)
+    currency: Mapped[str] = mapped_column(String(3), default="MNT")
+    status: Mapped[str] = mapped_column(String(12), default="pledged")
+    private_donor: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    confirmed_by: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class FamilyEvent(Base):
+    """Family gathering / reunion event with optional capacity and registration fees."""
+
+    __tablename__ = "family_events"
+    __table_args__ = (
+        CheckConstraint(
+            "capacity IS NULL OR capacity > 0",
+            name="ck_family_event_positive_capacity",
+        ),
+        CheckConstraint(
+            "adult_fee_minor >= 0 AND child_fee_minor >= 0",
+            name="ck_family_event_nonnegative_fees",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(
+        ForeignKey("families.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(180))
+    description: Mapped[str] = mapped_column(Text, default="")
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    location: Mapped[str] = mapped_column(String(300))
+    registration_deadline: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    adult_fee_minor: Mapped[int] = mapped_column(BigInteger, default=0)
+    child_fee_minor: Mapped[int] = mapped_column(BigInteger, default=0)
+    currency: Mapped[str] = mapped_column(String(3), default="MNT")
+    payment_instruction: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class EventRegistration(Base):
+    """Family member RSVP & attendance registration for a FamilyEvent."""
+
+    __tablename__ = "event_registrations"
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id", name="uq_event_registration_user"),
+        CheckConstraint(
+            "adult_count >= 0 AND child_count >= 0 AND adult_count + child_count > 0",
+            name="ck_event_attendee_counts",
+        ),
+        CheckConstraint(
+            "status IN ('registered', 'cancelled')",
+            name="ck_event_registration_status",
+        ),
+        CheckConstraint(
+            "payment_status IN ('unpaid', 'reported', 'confirmed')",
+            name="ck_event_payment_status",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    event_id: Mapped[UUID] = mapped_column(
+        ForeignKey("family_events.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    adult_count: Mapped[int] = mapped_column(Integer, default=1)
+    child_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(12), default="registered")
+    payment_status: Mapped[str] = mapped_column(String(12), default="unpaid")
+    confirmed_by: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
 
 
