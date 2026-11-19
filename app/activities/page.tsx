@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError, api, Family } from '../../lib/api';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import './activities.css';
 
 type Fund = {
@@ -15,6 +16,9 @@ type Fund = {
   payment_instruction: string;
   visibility: 'family' | 'public';
   is_active: boolean;
+  confirmed_income_minor: number;
+  total_expenses_minor: number;
+  net_balance_minor: number;
   created_at: string;
 };
 
@@ -28,6 +32,19 @@ type Donation = {
   status: 'pledged' | 'reported' | 'confirmed' | 'cancelled' | string;
   donor_name: string | null;
   private_donor: boolean;
+  is_mine?: boolean;
+  created_at: string;
+};
+
+type FundExpense = {
+  id: string;
+  fund_id: string;
+  amount_minor: number;
+  currency: string;
+  title: string;
+  note: string;
+  spent_at: string;
+  recorded_by_name: string | null;
   created_at: string;
 };
 
@@ -62,6 +79,13 @@ const money = (amountMinor: number, currency: string) =>
   `${new Intl.NumberFormat('mn-MN').format(amountMinor / 100)} ${currency === 'MNT' ? '₮' : currency}`;
 const localDate = (days: number) =>
   new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 16);
+const toLocalInputValue = (iso: string | null): string => {
+  if (!iso) return '';
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return '';
+  const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+};
 
 function statusLabel(status: string) {
   if (status === 'pledged') return 'Бүртгүүлсэн';
@@ -147,6 +171,7 @@ function ActivitiesContent() {
   const [section, setSection] = useState<'fund' | 'events'>('fund');
   const [funds, setFunds] = useState<Fund[]>([]);
   const [donations, setDonations] = useState<Record<string, Donation[]>>({});
+  const [expenses, setExpenses] = useState<Record<string, FundExpense[]>>({});
   const [events, setEvents] = useState<FamilyEvent[]>([]);
   const [registrations, setRegistrations] = useState<Record<string, Registration[]>>({});
   const [mine, setMine] = useState<Record<string, Registration | null>>({});
@@ -154,6 +179,14 @@ function ActivitiesContent() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [fundVisibility, setFundVisibility] = useState<'family' | 'public'>('family');
+  const [editingFundId, setEditingFundId] = useState<string | null>(null);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
   const [publicFunds, setPublicFunds] = useState<PublicFund[]>([]);
   const [publicFundsLoading, setPublicFundsLoading] = useState(true);
   const [publicFundsError, setPublicFundsError] = useState('');
@@ -218,13 +251,22 @@ function ActivitiesContent() {
       setFunds(fundRows);
       setEvents(eventRows);
 
-      const ds = await Promise.all(
-        fundRows.map(
-          async (f) =>
-            [f.id, await api<Donation[]>(`${root(familyId)}/funds/${f.id}/donations`)] as const,
+      const [ds, exs] = await Promise.all([
+        Promise.all(
+          fundRows.map(
+            async (f) =>
+              [f.id, await api<Donation[]>(`${root(familyId)}/funds/${f.id}/donations`)] as const,
+          ),
         ),
-      );
+        Promise.all(
+          fundRows.map(
+            async (f) =>
+              [f.id, await api<FundExpense[]>(`${root(familyId)}/funds/${f.id}/expenses`)] as const,
+          ),
+        ),
+      ]);
       setDonations(Object.fromEntries(ds));
+      setExpenses(Object.fromEntries(exs));
 
       const rs = await Promise.all(
         eventRows.map(
@@ -517,9 +559,8 @@ function ActivitiesContent() {
               <div className="activities-grid">
                 {funds.map((f) => {
                   const fundDonations = donations[f.id] ?? [];
-                  const confirmedSumMinor = fundDonations
-                    .filter((d) => d.status === 'confirmed')
-                    .reduce((acc, d) => acc + d.amount_minor, 0);
+                  const fundExpenses = expenses[f.id] ?? [];
+                  const isEditingFund = editingFundId === f.id;
 
                   return (
                     <article key={f.id} className="activities-card">
@@ -529,39 +570,171 @@ function ActivitiesContent() {
                           {f.is_active ? '🟢 ИДЭВХТЭЙ' : '⏸️ ТҮР ЗОГССОН'}
                         </span>
                         {owner && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() =>
-                              void run(
-                                () =>
-                                  api(`${root(familyId)}/funds/${f.id}/status?is_active=${!f.is_active}`, {
-                                    method: 'PATCH',
-                                  }),
-                                'Сангийн төлөв шинэчлэгдлээ.',
-                              )
-                            }
-                            className="activities-toggle-btn"
-                          >
-                            {f.is_active ? 'Түр зогсоох' : 'Идэвхжүүлэх'}
-                          </button>
+                          <div className="activities-head-actions">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => setEditingFundId(isEditingFund ? null : f.id)}
+                              className="activities-toggle-btn"
+                            >
+                              {isEditingFund ? 'Болих' : '✏️ Засах'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(
+                                  () =>
+                                    api(`${root(familyId)}/funds/${f.id}/status?is_active=${!f.is_active}`, {
+                                      method: 'PATCH',
+                                    }),
+                                  'Сангийн төлөв шинэчлэгдлээ.',
+                                )
+                              }
+                              className="activities-toggle-btn"
+                            >
+                              {f.is_active ? 'Түр зогсоох' : 'Идэвхжүүлэх'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                setConfirmState({
+                                  title: 'Ургийн санг устгах уу?',
+                                  message: `«${f.title}» санг устгах гэж байна. Хандив эсвэл зарцуулалтын бүртгэл орсон санг устгах боломжгүй (түр зогсоож болно).`,
+                                  confirmLabel: 'Устгах',
+                                  onConfirm: () =>
+                                    run(
+                                      () =>
+                                        api(`${root(familyId)}/funds/${f.id}`, {
+                                          method: 'DELETE',
+                                        }),
+                                      'Ургийн сан устгагдлаа.',
+                                    ),
+                                })
+                              }
+                              className="activities-btn-danger-ghost"
+                            >
+                              Устгах
+                            </button>
+                          </div>
                         )}
                       </div>
 
-                      <div>
-                        <h3 className="activities-card-title">{f.title}</h3>
-                        <p className="activities-card-desc activities-card-desc--compact">
-                          {f.purpose}
-                        </p>
-                      </div>
+                      {owner && isEditingFund ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const d = new FormData(e.currentTarget);
+                            void run(
+                              async () => {
+                                await api(`${root(familyId)}/funds/${f.id}`, {
+                                  method: 'PATCH',
+                                  body: JSON.stringify({
+                                    title: d.get('title'),
+                                    purpose: d.get('purpose'),
+                                    payment_instruction: d.get('instruction'),
+                                    visibility: d.get('visibility') === 'public' ? 'public' : 'family',
+                                  }),
+                                });
+                                setEditingFundId(null);
+                              },
+                              'Ургийн сангийн мэдээлэл шинэчлэгдлээ.',
+                            );
+                          }}
+                          className="activities-edit-panel"
+                        >
+                          <label className="activities-field-label">
+                            Сангийн нэр *
+                            <input
+                              name="title"
+                              required
+                              maxLength={180}
+                              defaultValue={f.title}
+                              className="activities-field-input"
+                            />
+                          </label>
+                          <label className="activities-field-label">
+                            Харагдах хүрээ
+                            <select
+                              name="visibility"
+                              defaultValue={f.visibility}
+                              className="activities-field-select"
+                            >
+                              <option value="family">Зөвхөн энэ гэр бүлийн гишүүдэд</option>
+                              <option value="public">Нийтэд нээлттэй</option>
+                            </select>
+                          </label>
+                          <label className="activities-field-label">
+                            Зориулалт *
+                            <textarea
+                              name="purpose"
+                              required
+                              maxLength={4000}
+                              rows={2}
+                              defaultValue={f.purpose}
+                              className="activities-field-textarea"
+                            />
+                          </label>
+                          <label className="activities-field-label">
+                            Дансны мэдээлэл *
+                            <textarea
+                              name="instruction"
+                              required
+                              maxLength={4000}
+                              rows={2}
+                              defaultValue={f.payment_instruction}
+                              className="activities-field-textarea"
+                            />
+                          </label>
+                          <div className="activities-edit-actions">
+                            <button type="submit" className="button primary" disabled={busy}>
+                              Хадгалах
+                            </button>
+                            <button
+                              type="button"
+                              className="button"
+                              disabled={busy}
+                              onClick={() => setEditingFundId(null)}
+                            >
+                              Болих
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div>
+                          <h3 className="activities-card-title">{f.title}</h3>
+                          <p className="activities-card-desc activities-card-desc--compact">
+                            {f.purpose}
+                          </p>
+                        </div>
+                      )}
 
-                      <div className="activities-confirmed-box">
-                        <span className="activities-confirmed-label">
-                          Баталгаажсан хуримтлал:
-                        </span>
-                        <strong className="activities-confirmed-amount">
-                          {money(confirmedSumMinor, f.currency)}
-                        </strong>
+                      <div className="activities-balance-grid">
+                        <div className="activities-balance-tile activities-balance-tile--income">
+                          <span className="activities-balance-label">Баталгаажсан орлого</span>
+                          <strong className="activities-balance-value">
+                            {money(f.confirmed_income_minor, f.currency)}
+                          </strong>
+                        </div>
+                        <div className="activities-balance-tile activities-balance-tile--expense">
+                          <span className="activities-balance-label">Нийт зарцуулалт</span>
+                          <strong className="activities-balance-value">
+                            {money(f.total_expenses_minor, f.currency)}
+                          </strong>
+                        </div>
+                        <div
+                          className={`activities-balance-tile ${
+                            f.net_balance_minor < 0
+                              ? 'activities-balance-tile--danger'
+                              : 'activities-balance-tile--income'
+                          }`}
+                        >
+                          <span className="activities-balance-label">Цэвэр үлдэгдэл</span>
+                          <strong className="activities-balance-value">
+                            {money(f.net_balance_minor, f.currency)}
+                          </strong>
+                        </div>
                       </div>
 
                       <div className="activities-payment-box">
@@ -586,7 +759,7 @@ function ActivitiesContent() {
                                     private_donor: d.get('private') === 'on',
                                   }),
                                 }),
-                              'Хандивын бүртгэл үүслээ. Шилжүүлснийхээ дараа "Төлбөр мэдэгдэх" дарна уу.',
+                              'Хандивын бүртгэл үүслээ. Шилжүүлснийхээ дараа "Шилжүүлсэн гэж мэдэгдэх" дарна уу.',
                             );
                             form.reset();
                           }}
@@ -611,11 +784,11 @@ function ActivitiesContent() {
 
                       <div className="activities-list-section">
                         <h4 className="activities-list-heading">
-                          Хандивын бүртгэл ({fundDonations.length})
+                          Хандивын ил тод бүртгэл ({fundDonations.length})
                         </h4>
                         {fundDonations.length === 0 ? (
                           <small className="activities-list-empty">
-                            Одоогоор хандив бүртгэгдээгүй байна.
+                            Одоогоор баталгаажсан хандив бүртгэгдээгүй байна.
                           </small>
                         ) : (
                           <div className="activities-list-stack">
@@ -629,7 +802,7 @@ function ActivitiesContent() {
                                   </em>
                                 </span>
                                 <div className="activities-ledger-actions">
-                                  {d.status === 'pledged' && (
+                                  {d.status === 'pledged' && (d.is_mine ?? true) && (
                                     <button
                                       type="button"
                                       disabled={busy}
@@ -669,6 +842,111 @@ function ActivitiesContent() {
                               </div>
                             ))}
                           </div>
+                        )}
+                      </div>
+
+                      <div className="activities-list-section">
+                        <h4 className="activities-list-heading">
+                          Зарцуулалтын бүртгэл ({fundExpenses.length})
+                        </h4>
+                        {fundExpenses.length === 0 ? (
+                          <small className="activities-list-empty">
+                            Одоогоор зарцуулалт бүртгэгдээгүй байна.
+                          </small>
+                        ) : (
+                          <div className="activities-list-stack">
+                            {fundExpenses.map((ex) => (
+                              <div key={ex.id} className="activities-ledger-row">
+                                <div className="activities-expense-row-main">
+                                  <span>
+                                    <strong>{ex.title}</strong> · {money(ex.amount_minor, ex.currency)}
+                                  </span>
+                                  <span className="activities-expense-meta">
+                                    {new Date(ex.spent_at).toLocaleDateString('mn-MN')}
+                                    {ex.note ? ` · ${ex.note}` : ''}
+                                    {ex.recorded_by_name ? ` · Бүртгэсэн: ${ex.recorded_by_name}` : ''}
+                                  </span>
+                                </div>
+                                {owner && (
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      setConfirmState({
+                                        title: 'Зарцуулалтын бичлэгийг устгах уу?',
+                                        message: `«${ex.title}» (${money(ex.amount_minor, ex.currency)}) зарцуулалтыг устгах уу?`,
+                                        confirmLabel: 'Устгах',
+                                        onConfirm: () =>
+                                          run(
+                                            () =>
+                                              api(`${root(familyId)}/funds/${f.id}/expenses/${ex.id}`, {
+                                                method: 'DELETE',
+                                              }),
+                                            'Зарцуулалт устгагдлаа.',
+                                          ),
+                                      })
+                                    }
+                                    className="activities-btn-danger-ghost"
+                                  >
+                                    Устгах
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {owner && (
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const form = e.currentTarget;
+                              const d = new FormData(form);
+                              void run(
+                                () =>
+                                  api(`${root(familyId)}/funds/${f.id}/expenses`, {
+                                    method: 'POST',
+                                    body: JSON.stringify({
+                                      title: d.get('title'),
+                                      amount_minor: Number(d.get('amount')) * 100,
+                                      note: d.get('note') || '',
+                                    }),
+                                  }),
+                                'Зарцуулалт бүртгэгдлээ.',
+                              );
+                              form.reset();
+                            }}
+                            className="activities-subform activities-subform--expense"
+                          >
+                            <input
+                              name="title"
+                              required
+                              maxLength={180}
+                              placeholder="Зардлын зориулалт *"
+                              className="activities-subform-input"
+                            />
+                            <input
+                              name="amount"
+                              type="number"
+                              min="1"
+                              required
+                              placeholder="Дүн (₮)"
+                              className="activities-subform-input"
+                            />
+                            <input
+                              name="note"
+                              maxLength={4000}
+                              placeholder="Тайлбар (заавал биш)"
+                              className="activities-subform-input"
+                            />
+                            <button
+                              type="submit"
+                              className="button activities-subform-btn"
+                              disabled={busy}
+                            >
+                              + Зардал нэмэх
+                            </button>
+                          </form>
                         )}
                       </div>
                     </article>
@@ -812,24 +1090,204 @@ function ActivitiesContent() {
                     (own?.adult_count ?? 0) * event.adult_fee_minor +
                     (own?.child_count ?? 0) * event.child_fee_minor;
                   const eventRegs = registrations[event.id] ?? [];
+                  const isEditingEvent = editingEventId === event.id;
 
                   return (
                     <article key={event.id} className="activities-card">
-                      <span className="activities-event-date">
-                        📅 {new Date(event.starts_at).toLocaleString('mn-MN')}
-                      </span>
-                      <h3 className="activities-card-title activities-card-desc--compact">
-                        {event.title}
-                      </h3>
-                      {event.description && (
-                        <p className="activities-card-desc activities-card-desc--compact">
-                          {event.description}
-                        </p>
+                      <div className="activities-fund-head">
+                        <span className="activities-event-date">
+                          📅 {new Date(event.starts_at).toLocaleString('mn-MN')}
+                        </span>
+                        {manage && (
+                          <div className="activities-head-actions">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => setEditingEventId(isEditingEvent ? null : event.id)}
+                              className="activities-toggle-btn"
+                            >
+                              {isEditingEvent ? 'Болих' : '✏️ Засах'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                setConfirmState({
+                                  title: 'Уулзалтыг устгах уу?',
+                                  message: `«${event.title}» уулзалтыг устгах уу? Төлбөр мэдэгдсэн эсвэл баталгаажсан бүртгэлтэй уулзалтыг устгах боломжгүй.`,
+                                  confirmLabel: 'Устгах',
+                                  onConfirm: () =>
+                                    run(
+                                      () =>
+                                        api(`${root(familyId)}/events/${event.id}`, {
+                                          method: 'DELETE',
+                                        }),
+                                      'Уулзалт устгагдлаа.',
+                                    ),
+                                })
+                              }
+                              className="activities-btn-danger-ghost"
+                            >
+                              Устгах
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {manage && isEditingEvent ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const d = new FormData(e.currentTarget);
+                            const rawDeadline = String(d.get('deadline') ?? '').trim();
+                            const rawCapacity = String(d.get('capacity') ?? '').trim();
+                            void run(
+                              async () => {
+                                await api(`${root(familyId)}/events/${event.id}`, {
+                                  method: 'PATCH',
+                                  body: JSON.stringify({
+                                    title: d.get('title'),
+                                    description: d.get('description') ?? '',
+                                    location: d.get('location'),
+                                    starts_at: new Date(String(d.get('starts_at'))).toISOString(),
+                                    registration_deadline: rawDeadline
+                                      ? new Date(rawDeadline).toISOString()
+                                      : null,
+                                    capacity: rawCapacity ? Number(rawCapacity) : null,
+                                    adult_fee_minor: Number(d.get('adult_fee') || 0) * 100,
+                                    child_fee_minor: Number(d.get('child_fee') || 0) * 100,
+                                    payment_instruction: d.get('instruction') || '',
+                                  }),
+                                });
+                                setEditingEventId(null);
+                              },
+                              'Уулзалтын мэдээлэл шинэчлэгдлээ.',
+                            );
+                          }}
+                          className="activities-edit-panel"
+                        >
+                          <label className="activities-field-label">
+                            Арга хэмжээний нэр *
+                            <input
+                              name="title"
+                              required
+                              maxLength={180}
+                              defaultValue={event.title}
+                              className="activities-field-input"
+                            />
+                          </label>
+                          <label className="activities-field-label">
+                            Байршил / Газар *
+                            <input
+                              name="location"
+                              required
+                              maxLength={300}
+                              defaultValue={event.location}
+                              className="activities-field-input"
+                            />
+                          </label>
+                          <div className="activities-form-grid activities-form-grid--compact">
+                            <label className="activities-field-label">
+                              Эхлэх өдөр, цаг *
+                              <input
+                                name="starts_at"
+                                type="datetime-local"
+                                required
+                                defaultValue={toLocalInputValue(event.starts_at)}
+                                className="activities-field-input"
+                              />
+                            </label>
+                            <label className="activities-field-label">
+                              Бүртгэл хаах хугацаа
+                              <input
+                                name="deadline"
+                                type="datetime-local"
+                                defaultValue={toLocalInputValue(event.registration_deadline)}
+                                className="activities-field-input"
+                              />
+                            </label>
+                            <label className="activities-field-label">
+                              Суудлын багтаамж
+                              <input
+                                name="capacity"
+                                type="number"
+                                min="1"
+                                placeholder="Хязгааргүй"
+                                defaultValue={event.capacity ?? ''}
+                                className="activities-field-input"
+                              />
+                            </label>
+                            <label className="activities-field-label">
+                              Том хүн (₮)
+                              <input
+                                name="adult_fee"
+                                type="number"
+                                min="0"
+                                defaultValue={Math.round(event.adult_fee_minor / 100)}
+                                className="activities-field-input"
+                              />
+                            </label>
+                            <label className="activities-field-label">
+                              Хүүхэд (₮)
+                              <input
+                                name="child_fee"
+                                type="number"
+                                min="0"
+                                defaultValue={Math.round(event.child_fee_minor / 100)}
+                                className="activities-field-input"
+                              />
+                            </label>
+                          </div>
+                          <label className="activities-field-label">
+                            Хөтөлбөр, тайлбар
+                            <textarea
+                              name="description"
+                              maxLength={12000}
+                              rows={2}
+                              defaultValue={event.description}
+                              className="activities-field-textarea"
+                            />
+                          </label>
+                          <label className="activities-field-label">
+                            Төлбөрийн заавар
+                            <textarea
+                              name="instruction"
+                              maxLength={4000}
+                              rows={2}
+                              defaultValue={event.payment_instruction}
+                              className="activities-field-textarea"
+                            />
+                          </label>
+                          <div className="activities-edit-actions">
+                            <button type="submit" className="button primary" disabled={busy}>
+                              Хадгалах
+                            </button>
+                            <button
+                              type="button"
+                              className="button"
+                              disabled={busy}
+                              onClick={() => setEditingEventId(null)}
+                            >
+                              Болих
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <h3 className="activities-card-title activities-card-desc--compact">
+                            {event.title}
+                          </h3>
+                          {event.description && (
+                            <p className="activities-card-desc activities-card-desc--compact">
+                              {event.description}
+                            </p>
+                          )}
+                          <p className="activities-event-location">
+                            <strong>📍 Байршил:</strong> {event.location}
+                            {event.capacity ? ` · ${event.capacity} суудал` : ''}
+                          </p>
+                        </>
                       )}
-                      <p className="activities-event-location">
-                        <strong>📍 Байршил:</strong> {event.location}
-                        {event.capacity ? ` · ${event.capacity} суудал` : ''}
-                      </p>
 
                       {(event.adult_fee_minor || event.child_fee_minor) > 0 && (
                         <p className="activities-event-fee">
@@ -988,6 +1446,23 @@ function ActivitiesContent() {
           </section>
         )}
       </section>
+
+      <ConfirmDialog
+        isOpen={confirmState !== null}
+        title={confirmState?.title ?? ''}
+        message={confirmState?.message ?? ''}
+        confirmLabel={confirmState?.confirmLabel ?? 'Устгах'}
+        cancelLabel="Болих"
+        variant="danger"
+        busy={busy}
+        onConfirm={() => {
+          if (!confirmState) return;
+          void confirmState.onConfirm().finally(() => setConfirmState(null));
+        }}
+        onCancel={() => {
+          if (!busy) setConfirmState(null);
+        }}
+      />
     </main>
   );
 }

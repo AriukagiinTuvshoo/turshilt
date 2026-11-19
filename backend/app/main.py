@@ -17,6 +17,7 @@ from app.families import invitations_router, lineages_router
 from app.families import router as families_router
 from app.family_activities import public_funds_router
 from app.family_activities import router as family_activities_router
+from app.family_chat import start_chat_pg_listener, stop_chat_pg_listener
 from app.invitation_preview import router as invitation_preview_router
 from app.memory_photos import router as memory_photos_router
 from app.observability import configure_logging, error_classification, request_id_context
@@ -27,8 +28,12 @@ configure_logging(settings.log_level, settings.app_env)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    yield
-    engine.dispose()
+    start_chat_pg_listener()
+    try:
+        yield
+    finally:
+        stop_chat_pg_listener()
+        engine.dispose()
 
 
 app = FastAPI(

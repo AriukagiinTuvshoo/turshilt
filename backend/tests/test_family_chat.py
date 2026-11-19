@@ -1,7 +1,16 @@
-from uuid import UUID
+import asyncio
+import json
+from uuid import UUID, uuid4
 
 from conftest import register_verified
 
+from app.family_chat import (
+    _chat_subscribers,
+    _handle_pg_notification,
+    _psycopg_conninfo,
+    _subscribers_lock,
+    publish_chat_event,
+)
 from app.models import FamilyMember
 
 
@@ -108,3 +117,102 @@ def test_family_chat_sse_stream_auth_and_event_delivery(client):
     # Unauthenticated user receives 401
     client.post("/api/v1/auth/logout")
     assert client.get(f"/api/v1/families/{family_id}/chat/stream?once=true").status_code == 401
+
+
+def test_psycopg_conninfo_normalization():
+    assert (
+        _psycopg_conninfo("postgresql+psycopg://user:pass@db:5432/guulin")
+        == "postgresql://user:pass@db:5432/guulin"
+    )
+    assert _psycopg_conninfo("postgresql://user:pass@db:5432/guulin") == "postgresql://user:pass@db:5432/guulin"
+    assert _psycopg_conninfo("postgres://user:pass@db:5432/guulin") == "postgres://user:pass@db:5432/guulin"
+    assert _psycopg_conninfo("sqlite:///./guulin.db") is None
+
+
+def test_pg_notification_dispatches_and_deduplicates():
+    family_id = uuid4()
+    loop = asyncio.new_event_loop()
+    queue: asyncio.Queue[dict] = asyncio.Queue()
+    entry = (loop, queue)
+    with _subscribers_lock:
+        _chat_subscribers[family_id].append(entry)
+
+    try:
+        event_id = uuid4().hex
+        envelope = json.dumps(
+            {
+                "event_id": event_id,
+                "family_id": str(family_id),
+                "event": {"type": "message_created", "message_id": "m-1", "sender_id": "u-1"},
+            }
+        )
+        # First delivery succeeds
+        assert _handle_pg_notification(envelope) is True
+        # Duplicate delivery (same worker PG loopback) is deduplicated
+        assert _handle_pg_notification(envelope) is False
+
+        # Flush loop callbacks
+        loop.call_soon(loop.stop)
+        loop.run_forever()
+
+        assert queue.qsize() == 1
+        delivered = queue.get_nowait()
+        assert delivered["type"] == "message_created"
+        assert delivered["message_id"] == "m-1"
+
+        # Malformed payloads fail safely without raising
+        assert _handle_pg_notification("not-json") is False
+        assert _handle_pg_notification(json.dumps(["not-a-dict"])) is False
+        assert _handle_pg_notification(json.dumps({"event_id": "abc", "family_id": "bad-uuid", "event": {}})) is False
+    finally:
+        with _subscribers_lock:
+            subs = _chat_subscribers.get(family_id)
+            if subs and entry in subs:
+                subs.remove(entry)
+            if subs is not None and not subs:
+                _chat_subscribers.pop(family_id, None)
+        loop.close()
+
+
+def test_publish_chat_event_invokes_pg_notify_and_local_dispatch(monkeypatch):
+    family_id = uuid4()
+    loop = asyncio.new_event_loop()
+    queue: asyncio.Queue[dict] = asyncio.Queue()
+    entry = (loop, queue)
+    emitted: list[str] = []
+
+    def fake_notify(envelope_json: str, db=None) -> bool:
+        emitted.append(envelope_json)
+        return True
+
+    monkeypatch.setattr("app.family_chat._emit_pg_notify", fake_notify)
+
+    with _subscribers_lock:
+        _chat_subscribers[family_id].append(entry)
+
+    try:
+        publish_chat_event(
+            family_id,
+            {"type": "message_created", "message_id": "m-2", "sender_id": "u-2", "recipient_id": None},
+        )
+        assert len(emitted) == 1
+        parsed = json.loads(emitted[0])
+        assert parsed["family_id"] == str(family_id)
+        assert parsed["event"]["message_id"] == "m-2"
+        assert isinstance(parsed["event_id"], str) and parsed["event_id"]
+
+        loop.call_soon(loop.stop)
+        loop.run_forever()
+        assert queue.qsize() == 1
+        assert queue.get_nowait()["message_id"] == "m-2"
+
+        # Loopback of the same event_id from PG LISTEN must be deduplicated
+        assert _handle_pg_notification(emitted[0]) is False
+    finally:
+        with _subscribers_lock:
+            subs = _chat_subscribers.get(family_id)
+            if subs and entry in subs:
+                subs.remove(entry)
+            if subs is not None and not subs:
+                _chat_subscribers.pop(family_id, None)
+        loop.close()

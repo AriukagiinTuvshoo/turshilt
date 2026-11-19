@@ -458,3 +458,122 @@
   margin-top: 8px;
   flex-wrap: wrap;
 }
+
+.activities-head-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.activities-btn-danger-ghost {
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-danger-border);
+  background: var(--ui-danger-bg);
+  color: var(--ui-danger-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activities-btn-danger-ghost:disabled,
+.activities-toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.activities-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .activities-balance-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.activities-balance-tile {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ui-surface-subtle);
+  border: 1px solid var(--ui-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activities-balance-tile--income {
+  background: var(--ui-success-bg);
+  border-color: var(--ui-success-border);
+}
+
+.activities-balance-tile--expense {
+  background: var(--ui-warning-bg);
+  border-color: var(--ui-warning-border);
+}
+
+.activities-balance-tile--danger {
+  background: var(--ui-danger-bg);
+  border-color: var(--ui-danger-border);
+}
+
+.activities-balance-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-text-secondary);
+}
+
+.activities-balance-tile--income .activities-balance-label,
+.activities-balance-tile--income .activities-balance-value {
+  color: var(--ui-success-text);
+}
+
+.activities-balance-tile--expense .activities-balance-label,
+.activities-balance-tile--expense .activities-balance-value {
+  color: var(--ui-warning-text);
+}
+
+.activities-balance-tile--danger .activities-balance-label,
+.activities-balance-tile--danger .activities-balance-value {
+  color: var(--ui-danger-text);
+}
+
+.activities-balance-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.activities-edit-panel {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--ui-surface-subtle);
+  border: 1px solid var(--ui-border-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.activities-edit-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.activities-expense-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activities-expense-meta {
+  font-size: 11px;
+  color: var(--ui-text-muted);
+}
+
+.activities-subform--expense {
+  margin-top: 8px;
+}

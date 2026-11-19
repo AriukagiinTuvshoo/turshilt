@@ -917,6 +917,31 @@ class Donation(Base):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class FundExpense(Base):
+    """Disbursement / expense entry recorded by a family owner against a FamilyFund."""
+
+    __tablename__ = "fund_expenses"
+    __table_args__ = (
+        CheckConstraint("amount_minor > 0", name="ck_fund_expense_positive_amount"),
+        Index("ix_fund_expense_fund_spent", "fund_id", "spent_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(
+        ForeignKey("families.id", ondelete="CASCADE"), index=True
+    )
+    fund_id: Mapped[UUID] = mapped_column(
+        ForeignKey("family_funds.id", ondelete="RESTRICT"), index=True
+    )
+    amount_minor: Mapped[int] = mapped_column(BigInteger)
+    currency: Mapped[str] = mapped_column(String(3), default="MNT")
+    title: Mapped[str] = mapped_column(String(180))
+    note: Mapped[str] = mapped_column(Text, default="")
+    spent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    recorded_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class FamilyEvent(Base):
     """Family gathering / reunion event with optional capacity and registration fees."""
 
