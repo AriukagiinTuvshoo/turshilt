@@ -355,4 +355,96 @@ def test_person_merge_transfers_relationships_and_marriages(client, database):
     )
 
 
+def test_person_merge_transfers_user_link_and_lineage(client, database):
+    assert register_verified(client, "merge-fk-owner@example.com").status_code == 201
+    family = client.post("/api/v1/families", json={"name": "FK Нэгтгэх тест"}).json()
+    fid = family["id"]
+
+    target = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={"first_name": "Болд", "last_name": "Боржигон", "gender": "male"},
+    ).json()
+    source = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={"first_name": "Болд", "last_name": "Боржигон", "gender": "male"},
+    ).json()
+
+    # Link logged-in user to source person
+    assert client.post(f"/api/v1/families/{fid}/persons/{source['id']}/link-me").status_code == 204
+    assert client.get("/api/v1/auth/me").json()["person_id"] == source["id"]
+
+    # Create lineage and assign it to source person
+    lineage = client.post(
+        f"/api/v1/families/{fid}/lineages",
+        json={"name": "Хиад Боржигон"},
+    ).json()
+    assign_resp = client.put(
+        f"/api/v1/families/{fid}/persons/{source['id']}/lineage-assignment",
+        json={"lineage_id": lineage["id"]},
+    )
+    assert assign_resp.status_code == 200
+
+    # Merge source into target
+    merge_resp = client.post(f"/api/v1/families/{fid}/persons/{target['id']}/merge/{source['id']}")
+    assert merge_resp.status_code == 200
+
+    # Verify UserPersonLink moved to target
+    assert client.get("/api/v1/auth/me").json()["person_id"] == target["id"]
+
+    # Verify PersonLineageAssignment moved to target
+    tree = client.get(f"/api/v1/families/{fid}/tree").json()
+    target_node = next(p for p in tree["persons"] if p["id"] == target["id"])
+    assert target_node["lineage_id"] == lineage["id"]
+    assert target_node["lineage_name"] == "Хиад Боржигон"
+
+
+def test_profile_photo_url_validation(client, database):
+    assert register_verified(client, "photo-url-owner@example.com").status_code == 201
+    family = client.post("/api/v1/families", json={"name": "Зураг URL тест"}).json()
+    fid = family["id"]
+
+    # Malicious / unsupported URL schemes must be rejected with 422
+    for bad_url in (
+        "javascript:alert(1)",
+        "data:image/svg+xml,<svg onload=alert(1)>",
+        "//evil.example.com/pixel.png",
+        "ftp://example.com/a.jpg",
+    ):
+        resp = client.post(
+            f"/api/v1/families/{fid}/persons",
+            json={"first_name": "Тест", "last_name": "Хүн", "profile_photo_url": bad_url},
+        )
+        assert resp.status_code == 422, f"Expected 422 for {bad_url}, got {resp.status_code}"
+
+    # Valid https and relative / paths must be accepted
+    p_ok = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={
+            "first_name": "Зөв",
+            "last_name": "Хүн",
+            "profile_photo_url": "https://example.com/avatar.jpg",
+        },
+    )
+    assert p_ok.status_code == 201
+    pid = p_ok.json()["id"]
+    profile_1 = client.get(f"/api/v1/families/{fid}/persons/{pid}").json()
+    assert profile_1["profile_photo_url"] == "https://example.com/avatar.jpg"
+
+    patch_ok = client.patch(
+        f"/api/v1/families/{fid}/persons/{pid}",
+        json={"profile_photo_url": "/uploads/avatar.webp"},
+    )
+    assert patch_ok.status_code == 200
+    profile_2 = client.get(f"/api/v1/families/{fid}/persons/{pid}").json()
+    assert profile_2["profile_photo_url"] == "/uploads/avatar.webp"
+
+    # PATCH must also reject javascript: URLs
+    patch_bad = client.patch(
+        f"/api/v1/families/{fid}/persons/{pid}",
+        json={"profile_photo_url": "javascript:void(0)"},
+    )
+    assert patch_bad.status_code == 422
+
+
+
 

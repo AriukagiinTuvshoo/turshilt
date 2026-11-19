@@ -23,9 +23,12 @@ from app.models import (
     MemoryPersonTag,
     ParentChildRelationship,
     Person,
+    PersonGuardianship,
+    PersonLineageAssignment,
     PhotoPersonTag,
     StoryPerson,
     User,
+    UserPersonLink,
 )
 from app.permissions import _audit, _member, _person_in_family
 from app.person_search import normalize_search_name
@@ -837,6 +840,56 @@ def merge_duplicate_persons(
                     updated_by=user.id,
                 )
             )
+
+    # 5b. Transfer account link, lineage assignment, and active guardianships
+    source_user_link = db.scalar(
+        select(UserPersonLink).where(UserPersonLink.person_id == source_id)
+    )
+    if source_user_link:
+        target_user_link = db.scalar(
+            select(UserPersonLink).where(UserPersonLink.person_id == target_id)
+        )
+        if target_user_link is None:
+            source_user_link.person_id = target_id
+        else:
+            db.delete(source_user_link)
+
+    source_lineage = db.scalar(
+        select(PersonLineageAssignment).where(PersonLineageAssignment.person_id == source_id)
+    )
+    if source_lineage:
+        target_lineage = db.scalar(
+            select(PersonLineageAssignment).where(PersonLineageAssignment.person_id == target_id)
+        )
+        if target_lineage is None:
+            source_lineage.person_id = target_id
+        else:
+            db.delete(source_lineage)
+
+    for g in db.scalars(
+        select(PersonGuardianship).where(
+            PersonGuardianship.family_id == family_id,
+            PersonGuardianship.person_id == source_id,
+            PersonGuardianship.status == "active",
+            PersonGuardianship.revoked_at.is_(None),
+        )
+    ).all():
+        exists = db.scalar(
+            select(PersonGuardianship).where(
+                PersonGuardianship.family_id == family_id,
+                PersonGuardianship.person_id == target_id,
+                PersonGuardianship.guardian_user_id == g.guardian_user_id,
+                PersonGuardianship.scope == g.scope,
+                PersonGuardianship.status == "active",
+                PersonGuardianship.revoked_at.is_(None),
+            )
+        )
+        if exists:
+            db.delete(g)
+        else:
+            g.person_id = target_id
+
+    db.flush()
 
     # 6. Detach source from family
     fp = db.scalar(

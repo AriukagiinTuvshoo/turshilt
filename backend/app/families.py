@@ -184,6 +184,21 @@ class PersonCreate(BaseModel):
     profile_photo_url: str | None = Field(default=None, max_length=1000)
     visibility: str = Field(default="family", pattern="^(private|family|public)$")
 
+    @field_validator("profile_photo_url")
+    @classmethod
+    def validate_profile_photo_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        lowered = cleaned.lower()
+        if lowered.startswith(("https://", "http://")):
+            return cleaned
+        if cleaned.startswith("/") and not cleaned.startswith("//"):
+            return cleaned
+        raise ValueError("Зургийн холбоос нь зөвхөн https://, http:// эсвэл дотоод / зам байх ёстой.")
+
     @model_validator(mode="after")
     def check_dates(self):
         if self.first_name is not None and not self.first_name.strip():
