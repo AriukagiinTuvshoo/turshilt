@@ -16,6 +16,8 @@ from app.models import (
     ArchivePerson,
     FamilyPerson,
     Memory,
+    MemoryComment,
+    MemoryLike,
     MemoryPersonTag,
     Person,
     Photo,
@@ -807,6 +809,84 @@ def _memory_visible_to_member(
     return visible
 
 
+class MemoryCommentInput(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    parent_comment_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_body(self):
+        if not self.body.strip():
+            raise ValueError("Сэтгэгдлийн агуулга хоосон байж болохгүй.")
+        return self
+
+
+class MemoryCommentPatch(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_body(self):
+        if not self.body.strip():
+            raise ValueError("Сэтгэгдлийн агуулга хоосон байж болохгүй.")
+        return self
+
+
+class MemoryCommentOut(BaseModel):
+    id: UUID
+    memory_id: UUID
+    user_id: UUID
+    author_name: str
+    parent_comment_id: UUID | None = None
+    body: str
+    created_at: datetime
+    updated_at: datetime
+    can_edit: bool = False
+    can_delete: bool = False
+
+
+class MemoryLikeOut(BaseModel):
+    memory_id: UUID
+    liked_by_me: bool
+    like_count: int
+    liked_by_names: list[str] = Field(default_factory=list)
+
+
+def _memory_engagement_batch(
+    db: Session,
+    memory_ids: list[UUID],
+    user_id: UUID,
+) -> tuple[dict[UUID, int], set[UUID], dict[UUID, list[str]], dict[UUID, int]]:
+    """Return (like_counts, liked_by_me_ids, liked_by_names, comment_counts) for memory_ids."""
+    if not memory_ids:
+        return {}, set(), {}, {}
+
+    like_rows = db.execute(
+        select(MemoryLike.memory_id, MemoryLike.user_id, User.display_name)
+        .join(User, User.id == MemoryLike.user_id)
+        .where(MemoryLike.memory_id.in_(memory_ids))
+        .order_by(MemoryLike.created_at.asc())
+    ).all()
+
+    like_counts: dict[UUID, int] = defaultdict(int)
+    liked_by_me_ids: set[UUID] = set()
+    liked_names: dict[UUID, list[str]] = defaultdict(list)
+
+    for mem_id, liker_id, display_name in like_rows:
+        like_counts[mem_id] += 1
+        if liker_id == user_id:
+            liked_by_me_ids.add(mem_id)
+        if display_name and len(liked_names[mem_id]) < 10:
+            liked_names[mem_id].append(display_name)
+
+    comment_rows = db.execute(
+        select(MemoryComment.memory_id, func.count(MemoryComment.id))
+        .where(MemoryComment.memory_id.in_(memory_ids))
+        .group_by(MemoryComment.memory_id)
+    ).all()
+    comment_counts = {mem_id: count for mem_id, count in comment_rows}
+
+    return like_counts, liked_by_me_ids, liked_names, comment_counts
+
+
 
 
 @router.post("/{family_id}/memories", status_code=201)
@@ -843,6 +923,10 @@ def create_memory(
         "visibility": memory.visibility,
         "person_ids": list(set(body.person_ids)),
         "created_at": memory.created_at,
+        "like_count": 0,
+        "liked_by_me": False,
+        "liked_by_names": [],
+        "comment_count": 0,
     }
 
 
@@ -900,6 +984,9 @@ def list_memories(
         names_by_memory.setdefault(memory_id, []).append(
             " ".join(part for part in (last_name, first_name, middle_name) if part)
         )
+    like_counts, liked_by_me_ids, liked_names, comment_counts = _memory_engagement_batch(
+        db, memory_ids, user.id
+    )
     return [
         {
             "id": item.id,
@@ -913,6 +1000,10 @@ def list_memories(
             "created_by": str(item.created_by) if item.created_by else None,
             "can_edit": is_admin or (item.created_by == user.id),
             "can_delete": is_admin or (item.created_by == user.id),
+            "like_count": like_counts.get(item.id, 0),
+            "liked_by_me": item.id in liked_by_me_ids,
+            "liked_by_names": liked_names.get(item.id, []),
+            "comment_count": comment_counts.get(item.id, 0),
         }
         for item in visible_memories
     ]
@@ -987,6 +1078,9 @@ def list_person_memories(
         names_by_memory.setdefault(memory_id, []).append(
             " ".join(part for part in (last_name, first_name, middle_name) if part)
         )
+    like_counts, liked_by_me_ids, liked_names, comment_counts = _memory_engagement_batch(
+        db, memory_ids, user.id
+    )
 
     return [
         {
@@ -1001,6 +1095,10 @@ def list_person_memories(
             "created_by": str(item.created_by) if item.created_by else None,
             "can_edit": is_admin or (item.created_by == user.id),
             "can_delete": is_admin or (item.created_by == user.id),
+            "like_count": like_counts.get(item.id, 0),
+            "liked_by_me": item.id in liked_by_me_ids,
+            "liked_by_names": liked_names.get(item.id, []),
+            "comment_count": comment_counts.get(item.id, 0),
         }
         for item in visible_memories
     ]
@@ -1072,6 +1170,10 @@ def get_memory(
             full_name = " ".join(part for part in (p.last_name, p.first_name, p.middle_name) if part) or p.first_name
             memory_tagged_people.append({"id": str(p.id), "name": full_name})
 
+    like_counts, liked_by_me_ids, liked_names, comment_counts = _memory_engagement_batch(
+        db, [memory.id], user.id
+    )
+
     return {
         "id": memory.id,
         "title": memory.title,
@@ -1084,6 +1186,10 @@ def get_memory(
         "created_by": str(memory.created_by) if memory.created_by else None,
         "can_edit": can_mutate,
         "can_delete": can_mutate,
+        "like_count": like_counts.get(memory.id, 0),
+        "liked_by_me": memory.id in liked_by_me_ids,
+        "liked_by_names": liked_names.get(memory.id, []),
+        "comment_count": comment_counts.get(memory.id, 0),
         "photos": [
             _photo_payload(
                 photo,
@@ -1161,4 +1267,230 @@ def delete_memory(
     db.delete(memory)
     db.commit()
     return Response(status_code=204)
+
+
+def _assert_visible_memory_for_interaction(
+    db: Session,
+    family_id: UUID,
+    memory_id: UUID,
+    user: User,
+) -> Memory:
+    memory = db.scalar(
+        select(Memory).where(Memory.id == memory_id, Memory.family_id == family_id)
+    )
+    if memory is None or (memory.visibility == "private" and memory.created_by != user.id):
+        raise HTTPException(status_code=404, detail="Дурсамж олдсонгүй.")
+    tag_ids = list(
+        db.scalars(
+            select(MemoryPersonTag.person_id).where(MemoryPersonTag.memory_id == memory_id)
+        ).all()
+    )
+    try:
+        _assert_memory_minor_scopes(db, family_id, user, tag_ids)
+    except HTTPException as error:
+        if error.status_code == 403:
+            raise HTTPException(status_code=404, detail="Дурсамж олдсонгүй.") from error
+        raise
+    return memory
+
+
+@router.post("/{family_id}/memories/{memory_id}/like", response_model=MemoryLikeOut)
+def toggle_memory_like(
+    family_id: UUID,
+    memory_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Toggle a single heart (❤️) like on a family memory."""
+    _member(db, family_id, user)
+    _assert_visible_memory_for_interaction(db, family_id, memory_id, user)
+
+    existing = db.scalar(
+        select(MemoryLike).where(
+            MemoryLike.memory_id == memory_id,
+            MemoryLike.user_id == user.id,
+        )
+    )
+    if existing is not None:
+        db.delete(existing)
+    else:
+        db.add(MemoryLike(memory_id=memory_id, user_id=user.id))
+    db.commit()
+
+    like_counts, liked_by_me_ids, liked_names, _ = _memory_engagement_batch(
+        db, [memory_id], user.id
+    )
+    return MemoryLikeOut(
+        memory_id=memory_id,
+        liked_by_me=memory_id in liked_by_me_ids,
+        like_count=like_counts.get(memory_id, 0),
+        liked_by_names=liked_names.get(memory_id, []),
+    )
+
+
+@router.get("/{family_id}/memories/{memory_id}/comments", response_model=list[MemoryCommentOut])
+def list_memory_comments(
+    family_id: UUID,
+    memory_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    member, _ = _member(db, family_id, user)
+    is_admin = member.role in {"owner", "editor"}
+    _assert_visible_memory_for_interaction(db, family_id, memory_id, user)
+
+    rows = db.execute(
+        select(MemoryComment, User.display_name)
+        .join(User, User.id == MemoryComment.user_id)
+        .where(MemoryComment.memory_id == memory_id)
+        .order_by(MemoryComment.created_at.asc(), MemoryComment.id.asc())
+    ).all()
+
+    return [
+        MemoryCommentOut(
+            id=comment.id,
+            memory_id=comment.memory_id,
+            user_id=comment.user_id,
+            author_name=display_name or "Гишүүн",
+            parent_comment_id=comment.parent_comment_id,
+            body=comment.body,
+            created_at=comment.created_at,
+            updated_at=comment.updated_at,
+            can_edit=(comment.user_id == user.id),
+            can_delete=(is_admin or comment.user_id == user.id),
+        )
+        for comment, display_name in rows
+    ]
+
+
+@router.post(
+    "/{family_id}/memories/{memory_id}/comments",
+    response_model=MemoryCommentOut,
+    status_code=201,
+)
+def create_memory_comment(
+    family_id: UUID,
+    memory_id: UUID,
+    body: MemoryCommentInput,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    member, _ = _member(db, family_id, user)
+    is_admin = member.role in {"owner", "editor"}
+    _assert_visible_memory_for_interaction(db, family_id, memory_id, user)
+
+    if body.parent_comment_id is not None:
+        parent = db.scalar(
+            select(MemoryComment).where(
+                MemoryComment.id == body.parent_comment_id,
+                MemoryComment.memory_id == memory_id,
+            )
+        )
+        if parent is None:
+            raise HTTPException(status_code=404, detail="Хариулах сэтгэгдэл олдсонгүй.")
+
+    comment = MemoryComment(
+        memory_id=memory_id,
+        user_id=user.id,
+        parent_comment_id=body.parent_comment_id,
+        body=body.body.strip(),
+    )
+    db.add(comment)
+    db.flush()
+    _audit(db, user, family_id, "memory.comment_created", "memory_comment", comment.id)
+    db.commit()
+    db.refresh(comment)
+
+    return MemoryCommentOut(
+        id=comment.id,
+        memory_id=comment.memory_id,
+        user_id=comment.user_id,
+        author_name=user.display_name or "Гишүүн",
+        parent_comment_id=comment.parent_comment_id,
+        body=comment.body,
+        created_at=comment.created_at,
+        updated_at=comment.updated_at,
+        can_edit=True,
+        can_delete=(is_admin or True),
+    )
+
+
+@router.patch(
+    "/{family_id}/memories/{memory_id}/comments/{comment_id}",
+    response_model=MemoryCommentOut,
+)
+def update_memory_comment(
+    family_id: UUID,
+    memory_id: UUID,
+    comment_id: UUID,
+    body: MemoryCommentPatch,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    member, _ = _member(db, family_id, user)
+    is_admin = member.role in {"owner", "editor"}
+    _assert_visible_memory_for_interaction(db, family_id, memory_id, user)
+
+    comment = db.scalar(
+        select(MemoryComment).where(
+            MemoryComment.id == comment_id,
+            MemoryComment.memory_id == memory_id,
+        )
+    )
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Сэтгэгдэл олдсонгүй.")
+    if comment.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Зөвхөн өөрийн сэтгэгдлийг засах боломжтой.")
+
+    comment.body = body.body.strip()
+    comment.updated_at = datetime.now(UTC)
+    _audit(db, user, family_id, "memory.comment_updated", "memory_comment", comment.id)
+    db.commit()
+    db.refresh(comment)
+
+    return MemoryCommentOut(
+        id=comment.id,
+        memory_id=comment.memory_id,
+        user_id=comment.user_id,
+        author_name=user.display_name or "Гишүүн",
+        parent_comment_id=comment.parent_comment_id,
+        body=comment.body,
+        created_at=comment.created_at,
+        updated_at=comment.updated_at,
+        can_edit=True,
+        can_delete=(is_admin or True),
+    )
+
+
+@router.delete(
+    "/{family_id}/memories/{memory_id}/comments/{comment_id}",
+    status_code=204,
+)
+def delete_memory_comment(
+    family_id: UUID,
+    memory_id: UUID,
+    comment_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    member, _ = _member(db, family_id, user)
+    is_admin = member.role in {"owner", "editor"}
+    _assert_visible_memory_for_interaction(db, family_id, memory_id, user)
+
+    comment = db.scalar(
+        select(MemoryComment).where(
+            MemoryComment.id == comment_id,
+            MemoryComment.memory_id == memory_id,
+        )
+    )
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Сэтгэгдэл олдсонгүй.")
+    if not (is_admin or comment.user_id == user.id):
+        raise HTTPException(status_code=403, detail="Сэтгэгдэл устгах эрхгүй.")
+
+    _audit(db, user, family_id, "memory.comment_deleted", "memory_comment", comment.id)
+    db.delete(comment)
+    db.commit()
+    return Response(status_code=204)
+
 

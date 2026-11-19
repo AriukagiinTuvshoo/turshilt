@@ -36,6 +36,7 @@ from app.permissions import (
     _member,
     _person_in_family,
 )
+from app.person_search import normalize_search_name
 from app.privacy import (
     active_guardian_scopes,
     person_is_minor,
@@ -71,6 +72,38 @@ class ParentChildCreate(BaseModel):
     parent_id: UUID
     child_id: UUID
     relationship_type: str = Field(default="biological", pattern="^(biological|adoptive)$")
+
+
+class ParentChildOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    parent_id: UUID
+    child_id: UUID
+    relationship_type: str
+    created_at: datetime
+
+
+class SmartConnectInput(BaseModel):
+    anchor_person_id: UUID
+    target_person_id: UUID
+    role: str = Field(pattern="^(father|mother|spouse|son|daughter|sibling)$")
+    relationship_type: str = Field(default="biological", pattern="^(biological|adoptive)$")
+    co_parent_id: UUID | None = None
+    auto_marry_coparent: bool = True
+    apply_to_siblings: bool = True
+    create_shared_parent_first_name: str | None = Field(default=None, max_length=120)
+    create_shared_parent_last_name: str | None = Field(default=None, max_length=120)
+    create_shared_parent_gender: str = Field(default="male", pattern="^(male|female)$")
+    marriage_start_date: date | None = None
+
+
+class SmartConnectOut(BaseModel):
+    created_parent_child_edges: int = 0
+    created_marriages: int = 0
+    created_shared_parent_id: UUID | None = None
+    summary: str
+
 
 
 class MarriageCreate(BaseModel):
@@ -280,6 +313,285 @@ def add_parent_child(
         "child_id": edge.child_id,
         "relationship_type": edge.relationship_type,
     }
+
+
+@router.get(
+    "/{family_id}/relationships/parent-child",
+    response_model=list[ParentChildOut],
+)
+def list_parent_child_relationships(
+    family_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _member(db, family_id, user)
+    own_link = db.scalar(select(UserPersonLink.person_id).where(UserPersonLink.user_id == user.id))
+    family_person_rows = list(
+        db.scalars(
+            select(Person)
+            .join(FamilyPerson)
+            .where(
+                FamilyPerson.family_id == family_id,
+                or_(
+                    Person.visibility != "private",
+                    Person.created_by == user.id,
+                    Person.id == own_link,
+                ),
+            )
+        ).all()
+    )
+    person_ids = [person.id for person in family_person_rows]
+    scopes = active_guardian_scopes(db, user.id, family_id, person_ids)
+    relationship_visible = {
+        person.id
+        for person in family_person_rows
+        if not person_is_minor(person) or "view_profile" in scopes.get(person.id, set())
+    }
+    edges = list(
+        db.scalars(
+            select(ParentChildRelationship)
+            .where(
+                ParentChildRelationship.parent_id.in_(person_ids),
+                ParentChildRelationship.child_id.in_(person_ids),
+            )
+            .order_by(ParentChildRelationship.created_at, ParentChildRelationship.id)
+        ).all()
+    )
+    return [
+        edge
+        for edge in edges
+        if edge.parent_id in relationship_visible and edge.child_id in relationship_visible
+    ]
+
+
+@router.delete("/{family_id}/relationships/parent-child", status_code=204)
+def remove_parent_child_by_pair(
+    family_id: UUID,
+    parent_id: UUID = Query(description="Эцэг эсвэл эхийн ID"),
+    child_id: UUID = Query(description="Хүүхдийн ID"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _member(db, family_id, user, {"owner", "editor"})
+    p = _person_in_family(db, family_id, parent_id)
+    c = _person_in_family(db, family_id, child_id)
+    _assert_person_visible(db, p, user)
+    _assert_person_visible(db, c, user)
+    edge = db.scalar(
+        select(ParentChildRelationship).where(
+            ParentChildRelationship.parent_id == parent_id,
+            ParentChildRelationship.child_id == child_id,
+        )
+    )
+    if edge is None:
+        raise HTTPException(status_code=404, detail="Эцэг эх-хүүхдийн холбоос олдсонгүй.")
+    edge_id = edge.id
+    db.delete(edge)
+    _audit(db, user, family_id, "relationship.parent_child.deleted", "parent_child", edge_id)
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/{family_id}/relationships/parent-child/{relationship_id}", status_code=204)
+def remove_parent_child_by_id(
+    family_id: UUID,
+    relationship_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _member(db, family_id, user, {"owner", "editor"})
+    edge = db.get(ParentChildRelationship, relationship_id)
+    if edge is None:
+        raise HTTPException(status_code=404, detail="Эцэг эх-хүүхдийн холбоос олдсонгүй.")
+    p = _person_in_family(db, family_id, edge.parent_id)
+    c = _person_in_family(db, family_id, edge.child_id)
+    _assert_person_visible(db, p, user)
+    _assert_person_visible(db, c, user)
+    db.delete(edge)
+    _audit(
+        db,
+        user,
+        family_id,
+        "relationship.parent_child.deleted",
+        "parent_child",
+        relationship_id,
+    )
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.post("/{family_id}/relationships/smart-connect", response_model=SmartConnectOut, status_code=201)
+def smart_connect_relatives(
+    family_id: UUID,
+    body: SmartConnectInput,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Atomically connect two family persons (parent, child, spouse, or sibling) with automatic co-parent marriage and sibling wiring."""
+    _member(db, family_id, user, {"owner", "editor"})
+    if body.anchor_person_id == body.target_person_id:
+        raise HTTPException(status_code=422, detail="Хүн өөрөө өөртэйгөө ураг холбох боломжгүй.")
+
+    anchor = _person_in_family(db, family_id, body.anchor_person_id)
+    target = _person_in_family(db, family_id, body.target_person_id)
+    _assert_person_visible(db, anchor, user)
+    _assert_person_visible(db, target, user)
+
+    db.execute(select(Family.id).where(Family.id == family_id).with_for_update())
+    family_person_ids = select(FamilyPerson.person_id).where(FamilyPerson.family_id == family_id)
+    current_edges = [
+        (r[0], r[1])
+        for r in db.execute(
+            select(ParentChildRelationship.parent_id, ParentChildRelationship.child_id).where(
+                ParentChildRelationship.parent_id.in_(family_person_ids),
+                ParentChildRelationship.child_id.in_(family_person_ids),
+            )
+        ).all()
+    ]
+
+    created_edges = 0
+    created_marriages = 0
+    created_shared_parent_id: UUID | None = None
+
+    def _ensure_parent_child(p_id: UUID, c_id: UUID) -> bool:
+        nonlocal created_edges
+        if p_id == c_id:
+            return False
+        if any(ep == p_id and ec == c_id for ep, ec in current_edges):
+            return False
+        try:
+            assert_parent_child_is_acyclic(current_edges, p_id, c_id)
+        except RelationshipError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        edge = ParentChildRelationship(
+            parent_id=p_id,
+            child_id=c_id,
+            relationship_type=body.relationship_type,
+            created_by=user.id,
+        )
+        db.add(edge)
+        db.flush()
+        current_edges.append((p_id, c_id))
+        _audit(db, user, family_id, "relationship.parent_child.created", "parent_child", edge.id)
+        created_edges += 1
+        return True
+
+    def _ensure_marriage(person_a: UUID, person_b: UUID) -> bool:
+        nonlocal created_marriages
+        if person_a == person_b:
+            return False
+        first, second = canonical_pair(person_a, person_b)
+        existing = db.scalar(
+            select(Marriage).where(
+                Marriage.person_1_id == first,
+                Marriage.person_2_id == second,
+                Marriage.deleted_at.is_(None),
+            )
+        )
+        if existing is not None:
+            return False
+        marriage = Marriage(
+            person_1_id=first,
+            person_2_id=second,
+            status="married",
+            start_date=body.marriage_start_date,
+            created_by=user.id,
+        )
+        db.add(marriage)
+        db.flush()
+        _audit(db, user, family_id, "marriage.created", "marriage", marriage.id)
+        created_marriages += 1
+        return True
+
+    anchor_name = f"{anchor.last_name} {anchor.first_name}".strip()
+    target_name = f"{target.last_name} {target.first_name}".strip()
+
+    if body.role in {"father", "mother"}:
+        # Existing parents of anchor BEFORE adding target
+        existing_parent_ids = [ep for ep, ec in current_edges if ec == anchor.id and ep != target.id]
+        _ensure_parent_child(target.id, anchor.id)
+
+        co_parent_to_use = body.co_parent_id
+        if co_parent_to_use is None and len(existing_parent_ids) == 1:
+            co_parent_to_use = existing_parent_ids[0]
+
+        if co_parent_to_use is not None and co_parent_to_use != target.id:
+            co_parent = _person_in_family(db, family_id, co_parent_to_use)
+            _assert_person_visible(db, co_parent, user)
+            if body.auto_marry_coparent:
+                _ensure_marriage(target.id, co_parent.id)
+            if body.apply_to_siblings:
+                sibling_ids = [
+                    ec
+                    for ep, ec in list(current_edges)
+                    if ep == co_parent.id and ec != anchor.id and ec != target.id
+                ]
+                for sib_id in sibling_ids:
+                    try:
+                        _ensure_parent_child(target.id, sib_id)
+                    except HTTPException:
+                        pass
+
+        role_label = "эцэг" if body.role == "father" else "эх"
+        summary = f"“{target_name}” нь “{anchor_name}”-ийн {role_label}-ээр амжилттай зангидагдлаа."
+
+    elif body.role == "spouse":
+        _ensure_marriage(anchor.id, target.id)
+        summary = f"“{anchor_name}” болон “{target_name}” нарын гэрлэлтийн холбоос бүртгэгдлээ."
+
+    elif body.role in {"son", "daughter"}:
+        _ensure_parent_child(anchor.id, target.id)
+        if body.co_parent_id and body.co_parent_id != anchor.id and body.co_parent_id != target.id:
+            co_parent = _person_in_family(db, family_id, body.co_parent_id)
+            _assert_person_visible(db, co_parent, user)
+            _ensure_parent_child(co_parent.id, target.id)
+            if body.auto_marry_coparent:
+                _ensure_marriage(anchor.id, co_parent.id)
+        role_label = "хүү" if body.role == "son" else "охин"
+        summary = f"“{target_name}” нь “{anchor_name}”-ийн {role_label}-өөр модонд зангидагдлаа."
+
+    else:  # sibling
+        anchor_parents = [ep for ep, ec in current_edges if ec == anchor.id and ep != target.id]
+        target_parents = [ep for ep, ec in current_edges if ec == target.id and ep != anchor.id]
+
+        shared_parents = list(dict.fromkeys(anchor_parents or target_parents))
+        if not shared_parents:
+            first_name = (body.create_shared_parent_first_name or "").strip()
+            last_name = (body.create_shared_parent_last_name or anchor.last_name or target.last_name or "").strip()
+            if not first_name:
+                first_name = f"{anchor.last_name or anchor.first_name}-ийн эцэг/эх"
+            shared_parent = Person(
+                first_name=first_name,
+                last_name=last_name,
+                gender=body.create_shared_parent_gender,
+                is_alive=False,
+                visibility="family",
+                search_first_name=normalize_search_name(first_name),
+                search_last_name=normalize_search_name(last_name),
+                search_middle_name="",
+                created_by=user.id,
+            )
+            db.add(shared_parent)
+            db.flush()
+            db.add(FamilyPerson(family_id=family_id, person_id=shared_parent.id, added_by=user.id))
+            db.flush()
+            _audit(db, user, family_id, "person.created", "person", shared_parent.id)
+            created_shared_parent_id = shared_parent.id
+            shared_parents = [shared_parent.id]
+
+        for p_id in shared_parents:
+            _ensure_parent_child(p_id, anchor.id)
+            _ensure_parent_child(p_id, target.id)
+
+        summary = f"“{target_name}” болон “{anchor_name}” нар ах/дүүсийн холбоосоор эцэг эхдээ зангидагдлаа."
+
+    db.commit()
+    return SmartConnectOut(
+        created_parent_child_edges=created_edges,
+        created_marriages=created_marriages,
+        created_shared_parent_id=created_shared_parent_id,
+        summary=summary,
+    )
 
 
 @router.post("/{family_id}/marriages", status_code=201)

@@ -11,6 +11,8 @@ import {
   Family,
   Marriage,
   MemoryListItem,
+  ParentChildRelationshipItem,
+  Person,
   PersonProfile,
   StoryListPage,
   ProfileRelationPerson,
@@ -19,6 +21,7 @@ import {
   OralHistoryExtractOut,
 } from '../../lib/api';
 import { ConfirmDialog } from '../../components/confirm-dialog';
+import { PedigreeWizardModal, RelativeRole } from '../../components/pedigree-wizard-modal';
 
 const EVENT_TYPE_MAP: Record<string, { label: string; icon: string }> = {
   birth: { label: 'Төрсөн', icon: '👶' },
@@ -112,6 +115,12 @@ function ProfilePageContent() {
   const [extractedResult, setExtractedResult] = useState<OralHistoryExtractOut | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [familyPeople, setFamilyPeople] = useState<Person[]>([]);
+  const [familyMarriages, setFamilyMarriages] = useState<Marriage[]>([]);
+  const [familyEdges, setFamilyEdges] = useState<ParentChildRelationshipItem[]>([]);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardRole, setWizardRole] = useState<RelativeRole>('son');
+  const [wizardMode, setWizardMode] = useState<'create' | 'existing'>('create');
 
   async function load(fid: string, pid: string, requestId?: number) {
     profileAbortRef.current?.abort();
@@ -148,6 +157,17 @@ function ProfilePageContent() {
       api<StoryListPage>(`/families/${fid}/stories?page=1&page_size=5&person_id=${encodeURIComponent(pid)}`, { signal }),
       api<ArchiveListPage>(`/families/${fid}/persons/${pid}/archives?page=1&page_size=5`, { signal }),
     ]);
+
+    void Promise.all([
+      api<Person[]>(`/families/${fid}/persons`, { signal }).catch(() => []),
+      api<Marriage[]>(`/families/${fid}/marriages`, { signal }).catch(() => []),
+      api<ParentChildRelationshipItem[]>(`/families/${fid}/relationships/parent-child`, { signal }).catch(() => []),
+    ]).then(([allPeople, allMarriages, allEdges]) => {
+      if (requestId !== undefined && requestId !== profileRequestRef.current) return;
+      setFamilyPeople(allPeople);
+      setFamilyMarriages(allMarriages);
+      setFamilyEdges(allEdges);
+    });
 
     if (requestId !== undefined && requestId !== profileRequestRef.current) return;
 
@@ -675,6 +695,45 @@ function ProfilePageContent() {
                 🌳 Удмын модонд харах
               </Link>
 
+              {currentUser && !currentUser.person_id && (
+                <button
+                  type="button"
+                  className="button"
+                  style={{ background: '#fef3c7', color: '#92400e', borderColor: '#fde68a', fontWeight: 700 }}
+                  disabled={mutationBusy}
+                  onClick={async () => {
+                    setMutationBusy(true);
+                    setError('');
+                    try {
+                      await api(`/families/${family}/persons/${person.id}/link-me`, { method: 'POST' });
+                      setCurrentUser((prev) => (prev ? { ...prev, person_id: person.id } : prev));
+                      setNotice('Таны хэрэглэгчийн бүртгэл энэ хүнтэй амжилттай холбогдлоо.');
+                    } catch (cause) {
+                      setError(cause instanceof ApiError ? cause.message : 'Бүртгэл холбоход алдаа гарлаа.');
+                    } finally {
+                      setMutationBusy(false);
+                    }
+                  }}
+                >
+                  👑 Энэ хүн бол би (Бүртгэлээ холбох)
+                </button>
+              )}
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="button"
+                  style={{ background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0', fontWeight: 700 }}
+                  onClick={() => {
+                    setWizardRole('son');
+                    setWizardMode('create');
+                    setWizardOpen(true);
+                  }}
+                >
+                  🌿 + Ураг холбох
+                </button>
+              )}
+
               {canEdit ? (
                 <>
                   <input
@@ -918,8 +977,72 @@ function ProfilePageContent() {
         {activeTab === 'relationships' && (
           <div className="profile-grid">
             <section className="card profile-card profile-relationships">
-              <div className="profile-card-heading">
+              <div className="profile-card-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                 <div><p className="eyebrow">KINSHIP</p><h2>Төрөл садангийн холбоос</h2></div>
+                {isAdmin && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="button"
+                      style={{ fontSize: 12, padding: '6px 12px' }}
+                      onClick={() => {
+                        setWizardRole('father');
+                        setWizardMode('create');
+                        setWizardOpen(true);
+                      }}
+                    >
+                      + Эцэг/Эх
+                    </button>
+                    <button
+                      type="button"
+                      className="button"
+                      style={{ fontSize: 12, padding: '6px 12px' }}
+                      onClick={() => {
+                        setWizardRole('spouse');
+                        setWizardMode('create');
+                        setWizardOpen(true);
+                      }}
+                    >
+                      + Хань
+                    </button>
+                    <button
+                      type="button"
+                      className="button"
+                      style={{ fontSize: 12, padding: '6px 12px' }}
+                      onClick={() => {
+                        setWizardRole('son');
+                        setWizardMode('create');
+                        setWizardOpen(true);
+                      }}
+                    >
+                      + Хүүхэд
+                    </button>
+                    <button
+                      type="button"
+                      className="button"
+                      style={{ fontSize: 12, padding: '6px 12px' }}
+                      onClick={() => {
+                        setWizardRole('sibling');
+                        setWizardMode('create');
+                        setWizardOpen(true);
+                      }}
+                    >
+                      + Ах/Дүү
+                    </button>
+                    <button
+                      type="button"
+                      className="button primary"
+                      style={{ fontSize: 12, padding: '6px 14px' }}
+                      onClick={() => {
+                        setWizardRole('son');
+                        setWizardMode('existing');
+                        setWizardOpen(true);
+                      }}
+                    >
+                      🔗 Бүртгэлтэй хүн холбох
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="relationship-columns">
                 <div>
@@ -928,17 +1051,46 @@ function ProfilePageContent() {
                     <p className="profile-empty">Эцэг эх бүртгэгдээгүй байна.</p>
                   ) : (
                     person.parents.map((parent) => (
-                      <Link
-                        className="relationship-item"
-                        key={parent.id}
-                        href={`/profile?family=${encodeURIComponent(family)}&person=${encodeURIComponent(parent.id)}`}
-                      >
-                        <span className="personavatar tiny">{initials(parent)}</span>
-                        <span>
-                          <strong>{relationName(parent)}</strong>
-                          <small>{relationLife(parent)}</small>
-                        </span>
-                      </Link>
+                      <div key={parent.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <Link
+                          className="relationship-item"
+                          style={{ flex: 1 }}
+                          href={`/profile?family=${encodeURIComponent(family)}&person=${encodeURIComponent(parent.id)}`}
+                        >
+                          <span className="personavatar tiny">{initials(parent)}</span>
+                          <span>
+                            <strong>{relationName(parent)}</strong>
+                            <small>{relationLife(parent)}</small>
+                          </span>
+                        </Link>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            title="Эцэг эхийн холбоосыг салгах"
+                            disabled={mutationBusy}
+                            onClick={async () => {
+                              setMutationBusy(true);
+                              setError('');
+                              try {
+                                await api(
+                                  `/families/${family}/relationships/parent-child?parent_id=${encodeURIComponent(parent.id)}&child_id=${encodeURIComponent(person.id)}`,
+                                  { method: 'DELETE' },
+                                );
+                                const refreshId = ++profileRequestRef.current;
+                                await load(family, id, refreshId);
+                                setNotice('Эцэг/эхийн холбоосыг салгалаа.');
+                              } catch (cause) {
+                                setError(cause instanceof ApiError ? cause.message : 'Холбоос салгаж чадсангүй.');
+                              } finally {
+                                setMutationBusy(false);
+                              }
+                            }}
+                            style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', borderRadius: 8, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
+                          >
+                            ✕ Салгах
+                          </button>
+                        )}
+                      </div>
                     ))
                   )}
                 </div>
@@ -970,17 +1122,46 @@ function ProfilePageContent() {
                     <p className="profile-empty">Үр хүүхэд бүртгэгдээгүй байна.</p>
                   ) : (
                     person.children.map((child) => (
-                      <Link
-                        className="relationship-item"
-                        key={child.id}
-                        href={`/profile?family=${encodeURIComponent(family)}&person=${encodeURIComponent(child.id)}`}
-                      >
-                        <span className="personavatar tiny">{initials(child)}</span>
-                        <span>
-                          <strong>{relationName(child)}</strong>
-                          <small>{relationLife(child)}</small>
-                        </span>
-                      </Link>
+                      <div key={child.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <Link
+                          className="relationship-item"
+                          style={{ flex: 1 }}
+                          href={`/profile?family=${encodeURIComponent(family)}&person=${encodeURIComponent(child.id)}`}
+                        >
+                          <span className="personavatar tiny">{initials(child)}</span>
+                          <span>
+                            <strong>{relationName(child)}</strong>
+                            <small>{relationLife(child)}</small>
+                          </span>
+                        </Link>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            title="Хүүхдийн холбоосыг салгах"
+                            disabled={mutationBusy}
+                            onClick={async () => {
+                              setMutationBusy(true);
+                              setError('');
+                              try {
+                                await api(
+                                  `/families/${family}/relationships/parent-child?parent_id=${encodeURIComponent(person.id)}&child_id=${encodeURIComponent(child.id)}`,
+                                  { method: 'DELETE' },
+                                );
+                                const refreshId = ++profileRequestRef.current;
+                                await load(family, id, refreshId);
+                                setNotice('Хүүхдийн холбоосыг салгалаа.');
+                              } catch (cause) {
+                                setError(cause instanceof ApiError ? cause.message : 'Холбоос салгаж чадсангүй.');
+                              } finally {
+                                setMutationBusy(false);
+                              }
+                            }}
+                            style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', borderRadius: 8, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
+                          >
+                            ✕ Салгах
+                          </button>
+                        )}
+                      </div>
                     ))
                   )}
                 </div>
@@ -995,10 +1176,35 @@ function ProfilePageContent() {
               {marriageState === 'ready' && (marriages.length === 0
                 ? <p className="profile-empty">Гэрлэлтийн түүх бүртгэгдээгүй байна.</p>
                 : marriages.map((marriage) => (
-                    <div className="history-item" key={marriage.id}>
-                      <strong>{marriage.other_person ? personName(marriage.other_person) : 'Хань'}</strong>
-                      <span>{marriage.status === 'married' ? 'Одоо хамт' : marriage.status === 'divorced' ? 'Салсан' : 'Бэлэвсэн'}</span>
-                      <small>{marriage.start_date ?? 'Эхэлсэн огноогүй'} – {marriage.end_date ?? (marriage.status === 'married' ? 'Одоо' : 'Дууссан огноогүй')}</small>
+                    <div className="history-item" key={marriage.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                      <div>
+                        <strong>{marriage.other_person ? personName(marriage.other_person) : 'Хань'}</strong>
+                        <span style={{ marginLeft: 8 }}>{marriage.status === 'married' ? 'Одоо хамт' : marriage.status === 'divorced' ? 'Салсан' : 'Бэлэвсэн'}</span>
+                        <small style={{ display: 'block' }}>{marriage.start_date ?? 'Эхэлсэн огноогүй'} – {marriage.end_date ?? (marriage.status === 'married' ? 'Одоо' : 'Дууссан огноогүй')}</small>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          disabled={mutationBusy}
+                          onClick={async () => {
+                            setMutationBusy(true);
+                            setError('');
+                            try {
+                              await api(`/families/${family}/marriages/${marriage.id}`, { method: 'DELETE' });
+                              const refreshId = ++profileRequestRef.current;
+                              await load(family, id, refreshId);
+                              setNotice('Гэрлэлтийн холбоосыг цуцаллаа.');
+                            } catch (cause) {
+                              setError(cause instanceof ApiError ? cause.message : 'Гэрлэлт цуцалж чадсангүй.');
+                            } finally {
+                              setMutationBusy(false);
+                            }
+                          }}
+                          style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', borderRadius: 8, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                        >
+                          ✕ Гэрлэлтийн холбоос устгах
+                        </button>
+                      )}
                     </div>
                   ))
               )}
@@ -1170,6 +1376,23 @@ function ProfilePageContent() {
           <Link href={`/tree?family=${encodeURIComponent(family)}&person=${encodeURIComponent(person.id)}`}>Удмын модонд харах →</Link>
         </footer>
       </section>
+      <PedigreeWizardModal
+        isOpen={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        familyId={family}
+        people={familyPeople.length ? familyPeople : person ? [person] : []}
+        marriages={familyMarriages}
+        parentChildEdges={familyEdges}
+        initialAnchorPersonId={person?.id ?? null}
+        initialRole={wizardRole}
+        initialMode={wizardMode}
+        onSuccess={async (_newPerson, msg) => {
+          setWizardOpen(false);
+          setNotice(msg);
+          const refreshId = ++profileRequestRef.current;
+          await load(family, id, refreshId);
+        }}
+      />
       <ConfirmDialog
         isOpen={confirmState.isOpen}
         title={confirmState.title}

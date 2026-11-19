@@ -71,6 +71,8 @@ export interface AdminPeopleSectionProps {
   relChildId: string;
   setRelChildId: (value: string) => void;
   handleAddParentChild: (e: FormEvent) => Promise<void>;
+  parentChildEdges: { id?: string; parent_id: string; child_id: string; relationship_type?: string }[];
+  handleDeleteParentChild: (parentId: string, childId: string) => void;
   marriageP1: string;
   setMarriageP1: (value: string) => void;
   marriageP2: string;
@@ -134,6 +136,8 @@ export function AdminPeopleSection({
   relChildId,
   setRelChildId,
   handleAddParentChild,
+  parentChildEdges,
+  handleDeleteParentChild,
   marriageP1,
   setMarriageP1,
   marriageP2,
@@ -603,6 +607,39 @@ export function AdminPeopleSection({
               Холбоос үүсгэх
             </button>
           </form>
+
+          {parentChildEdges.length > 0 && (
+            <div className="admin-list-stack" style={{ marginTop: 20 }}>
+              {parentChildEdges.map((edge) => {
+                const parent = people.find((p) => p.id === edge.parent_id);
+                const child = people.find((p) => p.id === edge.child_id);
+                return (
+                  <div key={`${edge.parent_id}-${edge.child_id}`} className="admin-item-row">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <GitFork size={15} style={{ color: '#059669' }} />
+                      <strong style={{ fontSize: 13.5, color: 'var(--ink-primary, #17372b)' }}>
+                        {parent ? `${parent.last_name} ${parent.first_name}` : 'Эцэг/Эх'} →{' '}
+                        {child ? `${child.last_name} ${child.first_name}` : 'Хүүхэд'}
+                      </strong>
+                      <span style={{ fontSize: 11, color: 'var(--ink-muted, #74857b)' }}>
+                        ({edge.relationship_type === 'adoptive' ? 'Үрчилсэн' : 'Төрсөн'})
+                      </span>
+                    </div>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteParentChild(edge.parent_id, edge.child_id)}
+                        className="admin-remove-btn"
+                        style={{ fontSize: 11, padding: '4px 10px' }}
+                      >
+                        Холбоос салгах
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="families-main-card">

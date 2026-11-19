@@ -124,6 +124,19 @@ export type FamilyStats = {
   member_count: number;
 };
 export type Marriage = { id: string; person_1_id: string; person_2_id: string; status: 'married' | 'divorced' | 'widowed'; start_date: string | null; end_date: string | null; location?: string | null; description?: string | null; created_at?: string; other_person?: Person };
+export type ParentChildRelationshipItem = {
+  id: string;
+  parent_id: string;
+  child_id: string;
+  relationship_type: 'biological' | 'adoptive';
+  created_at?: string;
+};
+export type SmartConnectOut = {
+  created_parent_child_edges: number;
+  created_marriages: number;
+  created_shared_parent_id?: string | null;
+  summary: string;
+};
 export type ProfileRelationPerson = Pick<
   Person,
   'id' | 'first_name' | 'last_name' | 'middle_name' | 'nickname' | 'gender' | 'birth_date' | 'is_alive' | 'death_date' | 'profile_photo_url'
@@ -219,6 +232,10 @@ export type MemoryListItem = {
   created_by?: string | null;
   can_edit?: boolean;
   can_delete?: boolean;
+  like_count?: number;
+  liked_by_me?: boolean;
+  liked_by_names?: string[];
+  comment_count?: number;
   photos?: {
     id: string;
     title: string | null;
@@ -227,6 +244,26 @@ export type MemoryListItem = {
     person_ids?: string[];
     tagged_people?: { id: string; name: string }[];
   }[];
+};
+
+export type MemoryLikeOut = {
+  memory_id: string;
+  liked_by_me: boolean;
+  like_count: number;
+  liked_by_names: string[];
+};
+
+export type MemoryCommentItem = {
+  id: string;
+  memory_id: string;
+  user_id: string;
+  author_name: string;
+  parent_comment_id: string | null;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  can_edit: boolean;
+  can_delete: boolean;
 };
 
 export type StoryPerson = {

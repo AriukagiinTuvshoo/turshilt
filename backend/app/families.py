@@ -50,6 +50,9 @@ from app.family_relationships import (
     OralHistoryExtractInput,
     OralHistoryExtractOut,
     ParentChildCreate,
+    ParentChildOut,
+    SmartConnectInput,
+    SmartConnectOut,
     _marriage_person_access,
 )
 from app.family_relationships import router as family_relationships_router
@@ -1403,6 +1406,7 @@ __all__ = [
     "OralHistoryExtractInput",
     "OralHistoryExtractOut",
     "ParentChildCreate",
+    "ParentChildOut",
     "PersonCreate",
     "PersonDirectoryItem",
     "PersonDirectoryPage",
@@ -1414,6 +1418,8 @@ __all__ = [
     "PersonSearchItem",
     "PersonSearchPage",
     "ProfileRelationPersonOut",
+    "SmartConnectInput",
+    "SmartConnectOut",
     "TreeOut",
     "TreeParentChildOut",
     "TreePersonOut",

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { API_BASE, ApiError, api, Family, MemoryListItem } from '../../../lib/api';
+import { API_BASE, ApiError, api, Family, MemoryCommentItem, MemoryLikeOut, MemoryListItem } from '../../../lib/api';
 import { PhotoTaggerModal } from '../photo-tagger-modal';
 import { ConfirmDialog } from '../../../components/confirm-dialog';
 
@@ -82,6 +82,13 @@ function MemoryDetailPageContent() {
   const [editSaving, setEditSaving] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<MemoryPhoto | null>(null);
   const [failedPhotoIds, setFailedPhotoIds] = useState<Set<string>>(() => new Set());
+  const [comments, setComments] = useState<MemoryCommentItem[]>([]);
+  const [newCommentBody, setNewCommentBody] = useState('');
+  const [replyParentId, setReplyParentId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentBody, setEditingCommentBody] = useState('');
+  const [commentBusy, setCommentBusy] = useState(false);
+  const [likeBusy, setLikeBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const familyRequestRef = useRef(0);
   const memoryRequestRef = useRef(0);
@@ -102,9 +109,13 @@ function MemoryDetailPageContent() {
     setLoading(true);
     setError('');
     try {
-      const result = await api<MemoryDetail>(`/families/${fid}/memories/${mid}`, { signal: controller.signal });
+      const [result, commentList] = await Promise.all([
+        api<MemoryDetail>(`/families/${fid}/memories/${mid}`, { signal: controller.signal }),
+        api<MemoryCommentItem[]>(`/families/${fid}/memories/${mid}/comments`, { signal: controller.signal }).catch(() => []),
+      ]);
       if (requestId !== memoryRequestRef.current) return;
       setMemory(result);
+      setComments(commentList);
     } catch (cause) {
       if (controller.signal.aborted || requestId !== memoryRequestRef.current) return;
       if (cause instanceof ApiError && cause.status === 401) {
@@ -392,6 +403,95 @@ function MemoryDetailPageContent() {
     });
   }
 
+  async function handleToggleLike() {
+    if (!familyId || !memoryId || likeBusy) return;
+    setLikeBusy(true);
+    try {
+      const res = await api<MemoryLikeOut>(`/families/${familyId}/memories/${memoryId}/like`, {
+        method: 'POST',
+      });
+      setMemory((prev) =>
+        prev
+          ? {
+              ...prev,
+              liked_by_me: res.liked_by_me,
+              like_count: res.like_count,
+              liked_by_names: res.liked_by_names,
+            }
+          : prev,
+      );
+    } catch (cause) {
+      setError(friendlyError(cause, 'Зүрх дарахад алдаа гарлаа.'));
+    } finally {
+      setLikeBusy(false);
+    }
+  }
+
+  async function handleAddComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!familyId || !memoryId || commentBusy || !newCommentBody.trim()) return;
+    setCommentBusy(true);
+    setError('');
+    try {
+      const created = await api<MemoryCommentItem>(
+        `/families/${familyId}/memories/${memoryId}/comments`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            body: newCommentBody.trim(),
+            parent_comment_id: replyParentId,
+          }),
+        },
+      );
+      setComments((prev) => [...prev, created]);
+      setMemory((prev) => (prev ? { ...prev, comment_count: (prev.comment_count ?? 0) + 1 } : prev));
+      setNewCommentBody('');
+      setReplyParentId(null);
+    } catch (cause) {
+      setError(friendlyError(cause, 'Сэтгэгдэл нэмэхэд алдаа гарлаа.'));
+    } finally {
+      setCommentBusy(false);
+    }
+  }
+
+  async function handleUpdateComment(commentId: string) {
+    if (!familyId || !memoryId || commentBusy || !editingCommentBody.trim()) return;
+    setCommentBusy(true);
+    setError('');
+    try {
+      const updated = await api<MemoryCommentItem>(
+        `/families/${familyId}/memories/${memoryId}/comments/${commentId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ body: editingCommentBody.trim() }),
+        },
+      );
+      setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
+      setEditingCommentId(null);
+      setEditingCommentBody('');
+    } catch (cause) {
+      setError(friendlyError(cause, 'Сэтгэгдэл засахад алдаа гарлаа.'));
+    } finally {
+      setCommentBusy(false);
+    }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    if (!familyId || !memoryId || commentBusy) return;
+    setCommentBusy(true);
+    setError('');
+    try {
+      await api<void>(`/families/${familyId}/memories/${memoryId}/comments/${commentId}`, {
+        method: 'DELETE',
+      });
+      setComments((prev) => prev.filter((c) => c.id !== commentId && c.parent_comment_id !== commentId));
+    } catch (cause) {
+      setError(friendlyError(cause, 'Сэтгэгдэл устгахад алдаа гарлаа.'));
+    } finally {
+      setCommentBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="memories-page">
@@ -438,7 +538,47 @@ function MemoryDetailPageContent() {
               <span>· {memory.person_ids.length} холбоотой хүн</span>
             </div>
           </div>
-          <div className="memory-detail-header-actions">
+          <div className="memory-detail-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => void handleToggleLike()}
+              disabled={likeBusy}
+              aria-pressed={Boolean(memory.liked_by_me)}
+              title={
+                memory.liked_by_names?.length
+                  ? `Зүрх дарсан: ${memory.liked_by_names.join(', ')}`
+                  : 'Дурсамжид зүрх дарах'
+              }
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '7px',
+                padding: '8px 16px',
+                borderRadius: '999px',
+                border: memory.liked_by_me ? '2px solid #e11d48' : '1.5px solid #cbd5e1',
+                background: memory.liked_by_me ? 'rgba(225, 29, 72, 0.12)' : '#ffffff',
+                color: memory.liked_by_me ? '#be123c' : '#334155',
+                fontSize: '13.5px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: memory.liked_by_me ? '0 4px 12px rgba(225, 29, 72, 0.18)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span style={{ fontSize: '16px', lineHeight: 1 }}>{memory.liked_by_me ? '❤️' : '🤍'}</span>
+              <span>{memory.liked_by_me ? 'Зүрх дарсан' : 'Зүрх дарах'}</span>
+              <span
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  background: memory.liked_by_me ? '#e11d48' : '#f1f5f9',
+                  color: memory.liked_by_me ? '#ffffff' : '#475569',
+                  fontSize: '11.5px',
+                }}
+              >
+                {memory.like_count ?? 0}
+              </span>
+            </button>
             {memory.can_edit ? (
               <>
                 <button type="button" className="memories-secondary" onClick={beginEdit} disabled={busy || editSaving}>✏️ Засах</button>
@@ -666,6 +806,252 @@ function MemoryDetailPageContent() {
           onTagsUpdated={handleTagsUpdated}
           onPhotoDeleted={handlePhotoDeleted}
         />
+
+        {/* HEART LIKES & THREADED FAMILY COMMENTS SECTION */}
+        <section
+          id="memory-comments"
+          className="memory-detail-people"
+          aria-labelledby="memory-comments-heading"
+          style={{ marginTop: '24px' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+            <div>
+              <p className="memories-eyebrow">FAMILY REACTIONS & COMMENTS</p>
+              <h2 id="memory-comments-heading" style={{ margin: 0 }}>
+                ❤️ Зүрх ({memory.like_count ?? 0}) & Сэтгэгдэл ({comments.length})
+              </h2>
+            </div>
+            {memory.liked_by_names && memory.liked_by_names.length > 0 && (
+              <span style={{ fontSize: '12.5px', color: '#be123c', fontWeight: 600 }}>
+                ❤️ Зүрх дарсан: {memory.liked_by_names.join(', ')}
+              </span>
+            )}
+          </div>
+
+          <form onSubmit={handleAddComment} style={{ marginBottom: '20px' }}>
+            {replyParentId && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', marginBottom: '8px', borderRadius: '8px', background: '#fef3c7', color: '#92400e', fontSize: '12px' }}>
+                <span>
+                  ↩️{' '}
+                  <strong>
+                    {comments.find((c) => c.id === replyParentId)?.author_name ?? 'Сэтгэгдэл'}
+                  </strong>
+                  -д хариу бичиж байна
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReplyParentId(null)}
+                  style={{ border: 'none', background: 'transparent', color: '#92400e', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  ✕ Цуцлах
+                </button>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={newCommentBody}
+                onChange={(e) => setNewCommentBody(e.target.value)}
+                maxLength={2000}
+                placeholder="Энэ дурсамжийн тухай сэтгэгдэл, дулаан үгээ үлдээгээрэй…"
+                disabled={commentBusy}
+                style={{
+                  flex: 1,
+                  minWidth: '240px',
+                  height: '42px',
+                  padding: '0 14px',
+                  borderRadius: '10px',
+                  border: '1.5px solid #d6cbb5',
+                  fontSize: '13.5px',
+                  background: '#ffffff',
+                }}
+              />
+              <button
+                type="submit"
+                className="memories-primary"
+                disabled={commentBusy || !newCommentBody.trim()}
+              >
+                {commentBusy ? 'Илгээж байна…' : 'Сэтгэгдэл үлдээх'}
+              </button>
+            </div>
+          </form>
+
+          {comments.length === 0 ? (
+            <p className="memory-muted">Одоогоор сэтгэгдэл алга байна. Анхны сэтгэгдлийг бичээрэй.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {comments
+                .filter((c) => !c.parent_comment_id)
+                .map((rootComment) => {
+                  const replies = comments.filter((r) => r.parent_comment_id === rootComment.id);
+                  return (
+                    <div
+                      key={rootComment.id}
+                      style={{
+                        padding: '14px 16px',
+                        borderRadius: '12px',
+                        background: '#fcfaf5',
+                        border: '1px solid #e2d9c8',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <div>
+                          <strong style={{ fontSize: '13.5px', color: '#17372b' }}>
+                            {rootComment.author_name}
+                          </strong>
+                          <small style={{ fontSize: '11.5px', color: '#64748b', marginLeft: '8px' }}>
+                            {formatCreatedAt(rootComment.created_at)}
+                          </small>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setReplyParentId(rootComment.id)}
+                            style={{ border: 'none', background: 'transparent', color: '#b45309', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            ↩️ Хариулах
+                          </button>
+                          {rootComment.can_edit && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingCommentId(rootComment.id);
+                                setEditingCommentBody(rootComment.body);
+                              }}
+                              style={{ border: 'none', background: 'transparent', color: '#475569', fontSize: '11.5px', cursor: 'pointer' }}
+                            >
+                              ✏️ Засах
+                            </button>
+                          )}
+                          {rootComment.can_delete && (
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteComment(rootComment.id)}
+                              disabled={commentBusy}
+                              style={{ border: 'none', background: 'transparent', color: '#b91c1c', fontSize: '11.5px', cursor: 'pointer' }}
+                            >
+                              ✕ Устгах
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {editingCommentId === rootComment.id ? (
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                          <input
+                            type="text"
+                            value={editingCommentBody}
+                            onChange={(e) => setEditingCommentBody(e.target.value)}
+                            maxLength={2000}
+                            style={{ flex: 1, padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                          />
+                          <button
+                            type="button"
+                            className="memories-primary"
+                            onClick={() => void handleUpdateComment(rootComment.id)}
+                            disabled={commentBusy}
+                          >
+                            Хадгалах
+                          </button>
+                          <button
+                            type="button"
+                            className="memories-secondary"
+                            onClick={() => setEditingCommentId(null)}
+                          >
+                            Болих
+                          </button>
+                        </div>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: '13.5px', color: '#1e293b', lineHeight: 1.55 }}>
+                          {rootComment.body}
+                        </p>
+                      )}
+
+                      {replies.length > 0 && (
+                        <div
+                          style={{
+                            marginTop: '10px',
+                            paddingLeft: '14px',
+                            borderLeft: '2px solid #e2d9c8',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                          }}
+                        >
+                          {replies.map((reply) => (
+                            <div key={reply.id} style={{ padding: '8px 12px', borderRadius: '10px', background: '#ffffff', border: '1px solid #ede6d6' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <div>
+                                  <strong style={{ fontSize: '12.5px', color: '#17372b' }}>
+                                    {reply.author_name}
+                                  </strong>
+                                  <small style={{ fontSize: '11px', color: '#64748b', marginLeft: '8px' }}>
+                                    {formatCreatedAt(reply.created_at)}
+                                  </small>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  {reply.can_edit && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingCommentId(reply.id);
+                                        setEditingCommentBody(reply.body);
+                                      }}
+                                      style={{ border: 'none', background: 'transparent', color: '#475569', fontSize: '11px', cursor: 'pointer' }}
+                                    >
+                                      ✏️ Засах
+                                    </button>
+                                  )}
+                                  {reply.can_delete && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDeleteComment(reply.id)}
+                                      disabled={commentBusy}
+                                      style={{ border: 'none', background: 'transparent', color: '#b91c1c', fontSize: '11px', cursor: 'pointer' }}
+                                    >
+                                      ✕ Устгах
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {editingCommentId === reply.id ? (
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                                  <input
+                                    type="text"
+                                    value={editingCommentBody}
+                                    onChange={(e) => setEditingCommentBody(e.target.value)}
+                                    maxLength={2000}
+                                    style={{ flex: 1, padding: '5px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="memories-primary"
+                                    onClick={() => void handleUpdateComment(reply.id)}
+                                    disabled={commentBusy}
+                                  >
+                                    Хадгалах
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="memories-secondary"
+                                    onClick={() => setEditingCommentId(null)}
+                                  >
+                                    Болих
+                                  </button>
+                                </div>
+                              ) : (
+                                <p style={{ margin: 0, fontSize: '13px', color: '#334155' }}>{reply.body}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </section>
 
         <footer className="memory-detail-footer">
           <Link href={`/tree?family=${encodeURIComponent(familyId)}`}>← Удмын мод руу буцах</Link>

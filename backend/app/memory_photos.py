@@ -26,6 +26,7 @@ from app.db import get_db
 from app.families import _require_minor_scope
 from app.family_content import (
     _assert_memory_minor_scopes,
+    _memory_engagement_batch,
     _memory_visible_to_member,
 )
 from app.models import (
@@ -414,7 +415,8 @@ def list_memories(
     db: Session = Depends(get_db),
     storage: ObjectStorage = Depends(get_storage),
 ):
-    _member(db, family_id, user)
+    member, _ = _member(db, family_id, user)
+    is_admin = member.role in {"owner", "editor"}
     _retry_pending_cleanup(db, storage, family_id, user)
     candidates = db.scalars(
         select(Memory).where(
@@ -483,15 +485,31 @@ def list_memories(
     }
     for memory_id, person_id, first_name, last_name, middle_name in all_tag_rows:
         tags_by_memory[memory_id].append((person_id, first_name, last_name, middle_name))
+    like_counts, liked_by_me_ids, liked_names, comment_counts = _memory_engagement_batch(
+        db, memory_ids, user.id
+    )
     items = []
     for memory in page_items:
         item = _memory_page_payload(memory, tags_by_memory[memory.id])
+        item["created_by"] = str(memory.created_by) if memory.created_by else None
+        item["can_edit"] = is_admin or (memory.created_by == user.id)
+        item["can_delete"] = is_admin or (memory.created_by == user.id)
+        item["like_count"] = like_counts.get(memory.id, 0)
+        item["liked_by_me"] = memory.id in liked_by_me_ids
+        item["liked_by_names"] = liked_names.get(memory.id, [])
+        item["comment_count"] = comment_counts.get(memory.id, 0)
         item["photos"] = [
             _photo_payload(photo, tags_by_photo[photo.id])
             for photo in photos_by_memory[memory.id]
         ]
         items.append(item)
-    return {"items": items, "page": page, "page_size": page_size, "total": total}
+    return {
+        "items": items,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "has_next": page * page_size < total,
+    }
 
 
 @router.post("/{family_id}/memories/{memory_id}/photos", status_code=201, response_model=PhotoResponse)

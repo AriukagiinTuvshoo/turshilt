@@ -109,6 +109,7 @@ export default function OnboardingPage() {
       if (!mounted.current || sequence !== requestSequence.current) return;
       await api(`/families/${family.id}/persons/${me.id}/link-me`, { method: 'POST' });
 
+      const createdParentIds: string[] = [];
       for (const [key, type] of [['father', 'biological'], ['mother', 'biological']] as const) {
         const name = String(values.get(key) ?? '').trim();
         if (!name) continue;
@@ -131,6 +132,22 @@ export default function OnboardingPage() {
             relationship_type: type,
           }),
         });
+        createdParentIds.push(parent.id);
+      }
+
+      if (createdParentIds.length === 2 && mounted.current && sequence === requestSequence.current) {
+        try {
+          await api(`/families/${family.id}/marriages`, {
+            method: 'POST',
+            body: JSON.stringify({
+              person_1_id: createdParentIds[0],
+              person_2_id: createdParentIds[1],
+              status: 'married',
+            }),
+          });
+        } catch {
+          // Optional auto-marriage on onboarding
+        }
       }
 
       if (mounted.current && sequence === requestSequence.current) {

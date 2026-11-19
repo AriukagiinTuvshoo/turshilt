@@ -731,6 +731,44 @@ class MemoryPersonTag(Base):
     person_id: Mapped[UUID] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"))
 
 
+class MemoryLike(Base):
+    """Single heart (❤️) like on a family memory by a family member."""
+
+    __tablename__ = "memory_likes"
+    __table_args__ = (
+        UniqueConstraint("memory_id", "user_id", name="uq_memory_like_user"),
+        Index("ix_memory_likes_memory_id", "memory_id"),
+        Index("ix_memory_likes_user_id", "user_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    memory_id: Mapped[UUID] = mapped_column(ForeignKey("memories.id", ondelete="CASCADE"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class MemoryComment(Base):
+    """Threaded family member comment on a memory."""
+
+    __tablename__ = "memory_comments"
+    __table_args__ = (
+        Index("ix_memory_comments_memory_created", "memory_id", "created_at"),
+        Index("ix_memory_comments_parent_id", "parent_comment_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    memory_id: Mapped[UUID] = mapped_column(ForeignKey("memories.id", ondelete="CASCADE"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    parent_comment_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("memory_comments.id", ondelete="CASCADE"), nullable=True
+    )
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=now_utc, onupdate=now_utc
+    )
+
+
 class Photo(Base):
     __tablename__ = "photos"
     __table_args__ = (

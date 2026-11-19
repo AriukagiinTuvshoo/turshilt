@@ -26,7 +26,8 @@ interface TreeDrawerProps {
   onSelectRelative: (relativeId: string) => void;
   onCenterPerson: (personId: string) => void;
   onOpenKinship: (personId: string) => void;
-  onAddRelation: (relationType: 'parent' | 'child' | 'spouse') => void;
+  onAddRelation: (relationType: 'parent' | 'child' | 'spouse' | 'sibling') => void;
+  onRefreshTree?: (notice?: string) => Promise<void>;
   onClose: () => void;
   onDivorce: (marriageId: string) => Promise<void>;
   profileHref: (personId: string) => string;
@@ -85,6 +86,7 @@ export function TreeDrawer({
   onCenterPerson,
   onOpenKinship,
   onAddRelation,
+  onRefreshTree,
   onClose,
   onDivorce,
   profileHref,
@@ -398,8 +400,16 @@ export function TreeDrawer({
         <button
           type="button"
           className="tree-action-pill"
+          onClick={() => onAddRelation('parent')}
+          title="Энэ хүнд эцэг эсвэл эх нэмэх / холбох"
+        >
+          + Эцэг/Эх
+        </button>
+        <button
+          type="button"
+          className="tree-action-pill"
           onClick={() => onAddRelation('child')}
-          title="Энэ хүнд хүүхэд нэмэх"
+          title="Энэ хүнд хүүхэд нэмэх / холбох"
         >
           + Хүүхэд
         </button>
@@ -407,9 +417,17 @@ export function TreeDrawer({
           type="button"
           className="tree-action-pill"
           onClick={() => onAddRelation('spouse')}
-          title="Энэ хүнд хань нэмэх"
+          title="Энэ хүнд хань нэмэх / холбох"
         >
           + Хань
+        </button>
+        <button
+          type="button"
+          className="tree-action-pill"
+          onClick={() => onAddRelation('sibling')}
+          title="Энэ хүнд ах, эгч, дүү нэмэх / холбох"
+        >
+          + Ах/Дүү
         </button>
         <Link
           className="tree-action-pill is-link"
@@ -479,15 +497,48 @@ export function TreeDrawer({
                   <div className="tree-relatives-chips">
                     {profile.parents.length ? (
                       profile.parents.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className="tree-relative-chip"
-                          onClick={() => onSelectRelative(p.id)}
-                          title={`${personName(p)} руу шилжих`}
-                        >
-                          👤 {personName(p)}
-                        </button>
+                        <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                          <button
+                            type="button"
+                            className="tree-relative-chip"
+                            onClick={() => onSelectRelative(p.id)}
+                            title={`${personName(p)} руу шилжих`}
+                          >
+                            👤 {personName(p)}
+                          </button>
+                          {Boolean(person.can_edit ?? profile?.can_edit) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await api(
+                                    `/families/${familyId}/relationships/parent-child?parent_id=${encodeURIComponent(p.id)}&child_id=${encodeURIComponent(person.id)}`,
+                                    { method: 'DELETE' },
+                                  );
+                                  setProfile((prev) =>
+                                    prev ? { ...prev, parents: prev.parents.filter((x) => x.id !== p.id) } : prev,
+                                  );
+                                  if (onRefreshTree) await onRefreshTree('Эцэг эх-хүүхдийн холбоосыг салгалаа.');
+                                } catch (err) {
+                                  setError(err instanceof ApiError ? err.message : 'Холбоос салгахад алдаа гарлаа.');
+                                }
+                              }}
+                              title={`${personName(p)} эцэг/эхийн холбоосыг салгах`}
+                              style={{
+                                border: 'none',
+                                background: 'rgba(220, 38, 38, 0.1)',
+                                color: '#b91c1c',
+                                borderRadius: '50%',
+                                width: 20,
+                                height: 20,
+                                fontSize: 11,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </span>
                       ))
                     ) : (
                       <em className="tree-muted">Бүртгэлгүй</em>
@@ -523,15 +574,48 @@ export function TreeDrawer({
                   <div className="tree-relatives-chips">
                     {profile.children.length ? (
                       profile.children.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className="tree-relative-chip"
-                          onClick={() => onSelectRelative(c.id)}
-                          title={`${personName(c)} руу шилжих`}
-                        >
-                          👶 {personName(c)}
-                        </button>
+                        <span key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                          <button
+                            type="button"
+                            className="tree-relative-chip"
+                            onClick={() => onSelectRelative(c.id)}
+                            title={`${personName(c)} руу шилжих`}
+                          >
+                            👶 {personName(c)}
+                          </button>
+                          {Boolean(person.can_edit ?? profile?.can_edit) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await api(
+                                    `/families/${familyId}/relationships/parent-child?parent_id=${encodeURIComponent(person.id)}&child_id=${encodeURIComponent(c.id)}`,
+                                    { method: 'DELETE' },
+                                  );
+                                  setProfile((prev) =>
+                                    prev ? { ...prev, children: prev.children.filter((x) => x.id !== c.id) } : prev,
+                                  );
+                                  if (onRefreshTree) await onRefreshTree('Хүүхдийн холбоосыг салгалаа.');
+                                } catch (err) {
+                                  setError(err instanceof ApiError ? err.message : 'Холбоос салгахад алдаа гарлаа.');
+                                }
+                              }}
+                              title={`${personName(c)} хүүхдийн холбоосыг салгах`}
+                              style={{
+                                border: 'none',
+                                background: 'rgba(220, 38, 38, 0.1)',
+                                color: '#b91c1c',
+                                borderRadius: '50%',
+                                width: 20,
+                                height: 20,
+                                fontSize: 11,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </span>
                       ))
                     ) : (
                       <em className="tree-muted">Бүртгэлгүй</em>

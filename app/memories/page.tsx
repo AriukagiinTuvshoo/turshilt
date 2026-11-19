@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { API_BASE, ApiError, api, Family, MemoryListItem, PersonSearchPage } from '../../lib/api';
+import { API_BASE, ApiError, api, Family, MemoryLikeOut, MemoryListItem, PersonSearchPage } from '../../lib/api';
 
 function friendlyError(cause: unknown, fallback: string) {
   if (cause instanceof ApiError) {
@@ -250,6 +250,34 @@ function MemoriesPageContent() {
     setSelectedPeople((current) => current.some((item) => item.id === person.id)
       ? current.filter((item) => item.id !== person.id)
       : current.length >= 100 ? current : [...current, person]);
+  }
+
+  async function toggleHeartLike(memoryId: string) {
+    if (!familyId) return;
+    try {
+      const res = await api<MemoryLikeOut>(`/families/${familyId}/memories/${memoryId}/like`, {
+        method: 'POST',
+      });
+      setMemories((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === memoryId
+                  ? {
+                      ...item,
+                      liked_by_me: res.liked_by_me,
+                      like_count: res.like_count,
+                      liked_by_names: res.liked_by_names,
+                    }
+                  : item,
+              ),
+            }
+          : current,
+      );
+    } catch (cause) {
+      setError(friendlyError(cause, 'Зүрх дарахад алдаа гарлаа.'));
+    }
   }
 
   async function loadMorePeople() {
@@ -676,7 +704,58 @@ function MemoriesPageContent() {
                             )) : 'Холбоотой хүнгүй'}</span>
                             <small>Хадгалсан {formatCreatedAt(memory.created_at)}</small>
                           </div>
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px' }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => void toggleHeartLike(memory.id)}
+                              aria-pressed={Boolean(memory.liked_by_me)}
+                              title={
+                                memory.liked_by_names?.length
+                                  ? `Зүрх дарсан: ${memory.liked_by_names.join(', ')}`
+                                  : 'Дурсамжид зүрх дарах'
+                              }
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '6px 12px',
+                                borderRadius: '999px',
+                                border: memory.liked_by_me ? '1.5px solid #e11d48' : '1px solid #e2d9c8',
+                                background: memory.liked_by_me ? 'rgba(225, 29, 72, 0.12)' : '#fcfaf5',
+                                color: memory.liked_by_me ? '#be123c' : '#475569',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                transition: 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease',
+                              }}
+                            >
+                              <span style={{ fontSize: '13.5px', lineHeight: 1 }}>
+                                {memory.liked_by_me ? '❤️' : '🤍'}
+                              </span>
+                              <span>{memory.like_count ?? 0}</span>
+                            </button>
+
+                            <Link
+                              href={`/memories/${memory.id}?family=${encodeURIComponent(familyId)}#memory-comments`}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '6px 11px',
+                                borderRadius: '999px',
+                                border: '1px solid #e2d9c8',
+                                background: '#fcfaf5',
+                                color: '#475569',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                textDecoration: 'none',
+                              }}
+                              title="Сэтгэгдэл унших / бичих"
+                            >
+                              <span>💬</span>
+                              <span>{memory.comment_count ?? 0}</span>
+                            </Link>
+
                             <Link className="memory-card-link" href={`/memories/${memory.id}?family=${encodeURIComponent(familyId)}`} style={{ flex: 1 }}>
                               Дурсамжийг үзэх →
                             </Link>

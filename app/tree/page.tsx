@@ -156,6 +156,7 @@ function TreePageContent() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardAnchorId, setWizardAnchorId] = useState<string | null>(null);
   const [wizardRole, setWizardRole] = useState<RelativeRole>('son');
+  const [wizardMode, setWizardMode] = useState<'create' | 'existing'>('create');
 
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
@@ -867,24 +868,46 @@ function TreePageContent() {
 
           <div className="tree-header-actions">
             {Boolean(family && (family.role === 'owner' || family.role === 'editor')) && (
-              <button
-                type="button"
-                className="tree-button tree-button--primary"
-                onClick={() => {
-                  setWizardAnchorId(selectedPerson?.id || null);
-                  setWizardRole(selectedPerson ? 'son' : 'standalone');
-                  setWizardOpen(true);
-                }}
-                style={{
-                  background: 'linear-gradient(135deg, #059669, #047857)',
-                  color: '#ffffff',
-                  border: 'none',
-                  fontWeight: 700,
-                  boxShadow: '0 2px 8px rgba(5, 150, 105, 0.28)',
-                }}
-              >
-                🌿 + Хүн / Ураг нэмэх
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="tree-button tree-button--primary"
+                  onClick={() => {
+                    setWizardAnchorId(selectedPerson?.id || null);
+                    setWizardRole(selectedPerson ? 'son' : 'standalone');
+                    setWizardMode('create');
+                    setWizardOpen(true);
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #059669, #047857)',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontWeight: 700,
+                    boxShadow: '0 2px 8px rgba(5, 150, 105, 0.28)',
+                  }}
+                >
+                  🌿 + Хүн / Ураг нэмэх
+                </button>
+                {(tree?.persons.length ?? 0) >= 2 && (
+                  <button
+                    type="button"
+                    className="tree-button tree-button--secondary"
+                    onClick={() => {
+                      setWizardAnchorId(selectedPerson?.id || tree?.persons[0]?.id || null);
+                      setWizardRole('son');
+                      setWizardMode('existing');
+                      setWizardOpen(true);
+                    }}
+                    style={{
+                      fontWeight: 700,
+                      borderColor: '#d97706',
+                      color: '#b45309',
+                    }}
+                  >
+                    🔗 2 хүн холбох
+                  </button>
+                )}
+              </>
             )}
             <button
               type="button"
@@ -1429,9 +1452,27 @@ function TreePageContent() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 selectPerson(person.id);
-                                setRelation('child');
+                                setWizardAnchorId(person.id);
+                                setWizardRole('father');
+                                setWizardMode('create');
+                                setWizardOpen(true);
                               }}
-                              title="Үр хүүхэд нэмэх"
+                              title="Эцэг эсвэл Эх нэмэх / холбох"
+                            >
+                              + Эцэг/Эх
+                            </button>
+                            <button
+                              type="button"
+                              className="tree-quick-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                selectPerson(person.id);
+                                setWizardAnchorId(person.id);
+                                setWizardRole('son');
+                                setWizardMode('create');
+                                setWizardOpen(true);
+                              }}
+                              title="Үр хүүхэд нэмэх / холбох"
                             >
                               + Хүүхэд
                             </button>
@@ -1441,9 +1482,12 @@ function TreePageContent() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 selectPerson(person.id);
-                                setRelation('spouse');
+                                setWizardAnchorId(person.id);
+                                setWizardRole('spouse');
+                                setWizardMode('create');
+                                setWizardOpen(true);
                               }}
-                              title="Хань холбох"
+                              title="Хань нэмэх / холбох"
                             >
                               + Хань
                             </button>
@@ -1481,10 +1525,16 @@ function TreePageContent() {
                 }}
                 onAddRelation={(type) => {
                   setWizardAnchorId(selectedId);
+                  setWizardMode('create');
                   if (type === 'child') setWizardRole('son');
                   else if (type === 'spouse') setWizardRole('spouse');
+                  else if (type === 'sibling') setWizardRole('sibling');
                   else setWizardRole('father');
                   setWizardOpen(true);
+                }}
+                onRefreshTree={async (msg) => {
+                  if (msg) setNotice(msg);
+                  await loadTree(familyId, selectedId || undefined, depth);
                 }}
                 onClose={() => setSelectedId('')}
                 onDivorce={(mid) => divorce(mid)}
@@ -1604,6 +1654,7 @@ function TreePageContent() {
         parentChildEdges={tree?.parent_child_relationships ?? []}
         initialAnchorPersonId={wizardAnchorId}
         initialRole={wizardRole}
+        initialMode={wizardMode}
         onSuccess={async (newPerson, msg) => {
           setWizardOpen(false);
           setNotice(msg);

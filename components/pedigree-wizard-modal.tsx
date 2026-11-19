@@ -5,21 +5,22 @@ import {
   X,
   Sparkles,
   TreeDeciduous,
-  UserCheck,
-  Heart,
-  ArrowUp,
-  ArrowDown,
-  ArrowRight,
-  Users,
   AlertCircle,
   AlertTriangle,
-  CheckCircle2,
-  Calendar,
-  Lock,
+  Link2,
+  UserPlus,
+  Search,
 } from 'lucide-react';
-import { ApiError, api, Person, Marriage, personName } from '../lib/api';
+import { ApiError, api, Person, Marriage, SmartConnectOut } from '../lib/api';
 
-export type RelativeRole = 'father' | 'mother' | 'spouse' | 'son' | 'daughter' | 'sibling' | 'standalone';
+export type RelativeRole =
+  | 'father'
+  | 'mother'
+  | 'spouse'
+  | 'son'
+  | 'daughter'
+  | 'sibling'
+  | 'standalone';
 
 export type WizardPersonItem = {
   id: string;
@@ -48,9 +49,10 @@ export interface PedigreeWizardModalProps {
   parentChildEdges?: { parent_id: string; child_id: string }[];
   initialAnchorPersonId?: string | null;
   initialRole?: RelativeRole;
+  initialMode?: 'create' | 'existing';
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (newPerson: Person, message: string) => void;
+  onSuccess: (person: Person, message: string) => void;
 }
 
 export function PedigreeWizardModal({
@@ -60,15 +62,28 @@ export function PedigreeWizardModal({
   parentChildEdges = [],
   initialAnchorPersonId = null,
   initialRole = 'son',
+  initialMode = 'create',
   isOpen,
   onClose,
   onSuccess,
 }: PedigreeWizardModalProps) {
+  const [mode, setMode] = useState<'create' | 'existing'>(initialMode);
   const [anchorPersonId, setAnchorPersonId] = useState<string>('');
   const [role, setRole] = useState<RelativeRole>(initialRole);
   const [coParentId, setCoParentId] = useState<string>('');
 
-  // Form Fields
+  // Smart Wiring Options
+  const [autoMarryCoparent, setAutoMarryCoparent] = useState(true);
+  const [applyToSiblings, setApplyToSiblings] = useState(true);
+  const [sharedParentFirstName, setSharedParentFirstName] = useState('');
+  const [sharedParentLastName, setSharedParentLastName] = useState('');
+  const [sharedParentGender, setSharedParentGender] = useState<'male' | 'female'>('male');
+
+  // Existing Person Selector State
+  const [existingSearch, setExistingSearch] = useState('');
+  const [existingTargetId, setExistingTargetId] = useState('');
+
+  // New Person Form Fields
   const [lastName, setLastName] = useState('');
   const [firstName, setFirstName] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
@@ -80,24 +95,41 @@ export function PedigreeWizardModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Initialize Anchor & Role
   useEffect(() => {
     if (!isOpen) return;
     setError('');
+    setMode(initialRole === 'standalone' ? 'create' : initialMode);
     const defaultAnchor =
       initialAnchorPersonId && people.some((p) => p.id === initialAnchorPersonId)
         ? initialAnchorPersonId
         : people[0]?.id || '';
     setAnchorPersonId(defaultAnchor);
     setRole(initialRole);
-  }, [isOpen, initialAnchorPersonId, initialRole, people]);
+    setExistingSearch('');
+    setExistingTargetId('');
+    setFirstName('');
+    setBirthDate('');
+    setDeathDate('');
+    setIsAlive(true);
+    setAutoMarryCoparent(true);
+    setApplyToSiblings(true);
+  }, [isOpen, initialAnchorPersonId, initialRole, initialMode, people]);
 
   const anchorPerson = useMemo(() => {
     return people.find((p) => p.id === anchorPersonId) ?? null;
   }, [people, anchorPersonId]);
 
-  // Find candidate co-parents (spouses of anchor)
-  const candidateCoParents = useMemo(() => {
+  // Existing parents of anchorPerson
+  const anchorExistingParents = useMemo(() => {
+    if (!anchorPersonId) return [];
+    const parentIds = new Set(
+      parentChildEdges.filter((e) => e.child_id === anchorPersonId).map((e) => e.parent_id),
+    );
+    return people.filter((p) => parentIds.has(p.id));
+  }, [anchorPersonId, parentChildEdges, people]);
+
+  // Candidate co-parents when adding son/daughter (spouses of anchor)
+  const candidateCoParentsForChild = useMemo(() => {
     if (!anchorPersonId) return [];
     const spouseIds = new Set<string>();
     for (const m of marriages) {
@@ -107,7 +139,11 @@ export function PedigreeWizardModal({
     return people.filter((p) => spouseIds.has(p.id));
   }, [anchorPersonId, marriages, people]);
 
-  // Adjust defaults when role or anchor changes
+  // Candidate existing parent when adding father/mother (to auto-marry and wire siblings)
+  const candidateExistingParents = useMemo(() => {
+    return anchorExistingParents;
+  }, [anchorExistingParents]);
+
   useEffect(() => {
     if (!anchorPerson) return;
 
@@ -115,38 +151,63 @@ export function PedigreeWizardModal({
       setGender('male');
       setLastName(anchorPerson.last_name || '');
       setLineageName(anchorPerson.lineage_name || anchorPerson.nickname || '');
+      const existingMother = candidateExistingParents.find((p) => p.gender === 'female') ?? candidateExistingParents[0];
+      setCoParentId(existingMother?.id || '');
     } else if (role === 'mother') {
       setGender('female');
       setLineageName('');
+      const existingFather = candidateExistingParents.find((p) => p.gender === 'male') ?? candidateExistingParents[0];
+      setCoParentId(existingFather?.id || '');
     } else if (role === 'spouse') {
       setGender(anchorPerson.gender === 'male' ? 'female' : 'male');
+      setCoParentId('');
     } else if (role === 'son') {
       setGender('male');
-      setLastName(anchorPerson.gender === 'male' ? anchorPerson.last_name : '');
+      setLastName(anchorPerson.gender === 'male' ? anchorPerson.first_name || anchorPerson.last_name : anchorPerson.last_name);
       setLineageName(anchorPerson.lineage_name || anchorPerson.nickname || '');
-      if (candidateCoParents.length === 1 && candidateCoParents[0]) {
-        setCoParentId(candidateCoParents[0].id);
-      }
+      setCoParentId(candidateCoParentsForChild[0]?.id || '');
     } else if (role === 'daughter') {
       setGender('female');
-      setLastName(anchorPerson.gender === 'male' ? anchorPerson.last_name : '');
+      setLastName(anchorPerson.gender === 'male' ? anchorPerson.first_name || anchorPerson.last_name : anchorPerson.last_name);
       setLineageName(anchorPerson.lineage_name || anchorPerson.nickname || '');
-      if (candidateCoParents.length === 1 && candidateCoParents[0]) {
-        setCoParentId(candidateCoParents[0].id);
-      }
+      setCoParentId(candidateCoParentsForChild[0]?.id || '');
     } else if (role === 'sibling') {
       setLastName(anchorPerson.last_name || '');
       setLineageName(anchorPerson.lineage_name || anchorPerson.nickname || '');
+      setSharedParentFirstName(anchorPerson.last_name || '');
+      setSharedParentLastName('');
+      setCoParentId('');
+    } else if (role === 'standalone') {
+      setMode('create');
+      setCoParentId('');
     }
-  }, [role, anchorPerson, candidateCoParents]);
+  }, [role, anchorPerson, candidateCoParentsForChild, candidateExistingParents]);
+
+  // Filtered existing people to connect
+  const eligibleExistingPeople = useMemo(() => {
+    const q = existingSearch.trim().toLowerCase();
+    return people.filter((p) => {
+      if (p.id === anchorPersonId) return false;
+      if (!q) return true;
+      const full = `${p.last_name} ${p.first_name} ${p.middle_name || ''} ${p.birth_date || ''}`.toLowerCase();
+      return full.includes(q);
+    });
+  }, [people, anchorPersonId, existingSearch]);
+
+  const selectedExistingTarget = useMemo(() => {
+    return people.find((p) => p.id === existingTargetId) ?? null;
+  }, [people, existingTargetId]);
 
   // Heuristic Temporal & Biological Validation
   const validationWarnings = useMemo(() => {
     const warnings: string[] = [];
-    if (!anchorPerson || !birthDate || role === 'standalone') return warnings;
+    if (!anchorPerson || role === 'standalone') return warnings;
+
+    const targetBirth = mode === 'existing' ? selectedExistingTarget?.birth_date : birthDate;
+    if (!targetBirth) return warnings;
 
     const anchorYear = anchorPerson.birth_date ? parseInt(anchorPerson.birth_date.slice(0, 4), 10) : null;
-    const newYear = parseInt(birthDate.slice(0, 4), 10);
+    const newYear = parseInt(targetBirth.slice(0, 4), 10);
 
     if (anchorYear && newYear && !isNaN(anchorYear) && !isNaN(newYear)) {
       if (role === 'father' || role === 'mother') {
@@ -166,7 +227,7 @@ export function PedigreeWizardModal({
       }
     }
 
-    if (!isAlive && deathDate && birthDate) {
+    if (mode === 'create' && !isAlive && deathDate && birthDate) {
       const bY = parseInt(birthDate.slice(0, 4), 10);
       const dY = parseInt(deathDate.slice(0, 4), 10);
       if (bY && dY && dY < bY) {
@@ -175,115 +236,97 @@ export function PedigreeWizardModal({
     }
 
     return warnings;
-  }, [anchorPerson, birthDate, role, isAlive, deathDate]);
+  }, [anchorPerson, birthDate, role, isAlive, deathDate, mode, selectedExistingTarget]);
 
   if (!isOpen) return null;
 
+  const normalizeDateInput = (raw: string): string | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (/^\d{4}$/.test(trimmed)) return `${trimmed}-01-01`;
+    return trimmed;
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!firstName.trim() || !lastName.trim()) {
-      setError('Овог болон нэрийг заавал гүйцэд оруулна уу.');
-      return;
-    }
     setLoading(true);
     setError('');
 
     try {
-      // 1. Create Person
-      const newPerson = await api<Person>(`/families/${familyId}/persons`, {
-        method: 'POST',
-        body: JSON.stringify({
-          last_name: lastName.trim(),
-          first_name: firstName.trim(),
-          gender,
-          birth_date: birthDate || null,
-          is_alive: isAlive,
-          death_date: !isAlive && deathDate ? deathDate : null,
-          lineage_name: lineageName.trim() || null,
-        }),
-      });
+      let targetPerson: Person;
 
-      let relationSummary = '';
-
-      // 2. Wire Relationships automatically
-      if (anchorPerson && role !== 'standalone') {
-        if (role === 'father' || role === 'mother') {
-          // Parent-child: newPerson is parent of anchor
-          await api(`/families/${familyId}/relationships/parent-child`, {
-            method: 'POST',
-            body: JSON.stringify({
-              parent_id: newPerson.id,
-              child_id: anchorPerson.id,
-              relationship_type: 'biological',
-            }),
-          });
-          relationSummary = `${formatPersonName(anchorPerson)}-ийн ${role === 'father' ? 'эцэг' : 'эх'}-ээр холбогдлоо.`;
-        } else if (role === 'spouse') {
-          // Marriage between anchor and newPerson
-          await api<Marriage>(`/families/${familyId}/marriages`, {
-            method: 'POST',
-            body: JSON.stringify({
-              person_1_id: anchorPerson.id,
-              person_2_id: newPerson.id,
-              status: 'married',
-              start_date: null,
-            }),
-          });
-          relationSummary = `${formatPersonName(anchorPerson)}-ийн ханиар гэрлэлт бүртгэгдлээ.`;
-        } else if (role === 'son' || role === 'daughter') {
-          // Parent-child: anchor is parent of newPerson
-          await api(`/families/${familyId}/relationships/parent-child`, {
-            method: 'POST',
-            body: JSON.stringify({
-              parent_id: anchorPerson.id,
-              child_id: newPerson.id,
-              relationship_type: 'biological',
-            }),
-          });
-
-          // If co-parent selected, wire second parent too!
-          if (coParentId && coParentId !== anchorPerson.id) {
-            try {
-              await api(`/families/${familyId}/relationships/parent-child`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  parent_id: coParentId,
-                  child_id: newPerson.id,
-                  relationship_type: 'biological',
-                }),
-              });
-            } catch {
-              // Gracefully handle if edge already existed
-            }
-          }
-          relationSummary = `${formatPersonName(anchorPerson)}-ийн ${role === 'son' ? 'хүү' : 'охин'}-оор модонд зангилагдлаа.`;
-        } else if (role === 'sibling') {
-          // Sibling: find anchor's parents and link to newPerson
-          const anchorParents = parentChildEdges
-            .filter((edge) => edge.child_id === anchorPerson.id)
-            .map((edge) => edge.parent_id);
-
-          for (const pId of anchorParents) {
-            try {
-              await api(`/families/${familyId}/relationships/parent-child`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  parent_id: pId,
-                  child_id: newPerson.id,
-                  relationship_type: 'biological',
-                }),
-              });
-            } catch {
-              // ignore duplicate
-            }
-          }
-          relationSummary = `${formatPersonName(anchorPerson)}-ийн ах/дүүгээр эцэг эхтэй нь холбогдлоо.`;
+      if (mode === 'existing' && role !== 'standalone') {
+        if (!existingTargetId) {
+          setError('Холбох бүртгэлтэй хүнээ жагсаалтаас сонгоно уу.');
+          setLoading(false);
+          return;
         }
+        const found = people.find((p) => p.id === existingTargetId);
+        targetPerson = {
+          id: existingTargetId,
+          first_name: found?.first_name ?? '',
+          last_name: found?.last_name ?? '',
+          middle_name: found?.middle_name ?? null,
+          nickname: found?.nickname ?? null,
+          gender: found?.gender ?? 'unknown',
+          birth_date: found?.birth_date ?? null,
+          birth_place: null,
+          is_alive: found?.is_alive ?? true,
+          death_date: found?.death_date ?? null,
+          death_place: null,
+          short_description: null,
+          visibility: 'family',
+        };
       } else {
-        relationSummary = 'Анхдагч язгуур хүнээр бүртгэгдлээ.';
+        if (!firstName.trim()) {
+          setError('Хүний өөрийн нэрийг заавал оруулна уу.');
+          setLoading(false);
+          return;
+        }
+        targetPerson = await api<Person>(`/families/${familyId}/persons`, {
+          method: 'POST',
+          body: JSON.stringify({
+            last_name: lastName.trim(),
+            first_name: firstName.trim(),
+            middle_name: lineageName.trim() || null,
+            gender,
+            birth_date: normalizeDateInput(birthDate),
+            is_alive: isAlive,
+            death_date: !isAlive ? normalizeDateInput(deathDate) : null,
+          }),
+        });
       }
 
-      onSuccess(newPerson, `"${lastName} ${firstName}" амжилттай бүртгэгдэж, ${relationSummary}`);
+      if (anchorPerson && role !== 'standalone') {
+        const res = await api<SmartConnectOut>(`/families/${familyId}/relationships/smart-connect`, {
+          method: 'POST',
+          body: JSON.stringify({
+            anchor_person_id: anchorPerson.id,
+            target_person_id: targetPerson.id,
+            role,
+            relationship_type: 'biological',
+            co_parent_id: coParentId || null,
+            auto_marry_coparent: autoMarryCoparent,
+            apply_to_siblings: applyToSiblings,
+            create_shared_parent_first_name:
+              role === 'sibling' && anchorExistingParents.length === 0
+                ? sharedParentFirstName.trim() || null
+                : null,
+            create_shared_parent_last_name:
+              role === 'sibling' && anchorExistingParents.length === 0
+                ? sharedParentLastName.trim() || null
+                : null,
+            create_shared_parent_gender: sharedParentGender,
+          }),
+        });
+        onSuccess(targetPerson, res.summary);
+      } else {
+        onSuccess(
+          targetPerson,
+          `“${targetPerson.last_name} ${targetPerson.first_name}” анхдагч язгуур хүнээр бүртгэгдлээ.`,
+        );
+      }
+
       onClose();
     } catch (cause) {
       if (cause instanceof ApiError) {
@@ -314,7 +357,7 @@ export function PedigreeWizardModal({
     >
       <div
         style={{
-          width: 'min(660px, 100%)',
+          width: 'min(680px, 100%)',
           maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
@@ -352,11 +395,14 @@ export function PedigreeWizardModal({
               <TreeDeciduous size={20} />
             </div>
             <div>
-              <h2 id="pedigree-wizard-title" style={{ font: '700 18px Georgia, serif', margin: 0, color: 'var(--ink-primary, #17372b)' }}>
-                Ургийн шууд холболттой хүн нэмэх (Wizard)
+              <h2
+                id="pedigree-wizard-title"
+                style={{ font: '700 18px Georgia, serif', margin: 0, color: 'var(--ink-primary, #17372b)' }}
+              >
+                Удмын Ухаалаг Холболт (Ураг Зангидах Хөтөч)
               </h2>
               <small style={{ color: 'var(--ink-secondary, #485c53)', fontSize: '11.5px' }}>
-                Хүнийг модон дээрх байршлаас нь шууд зангидан үүсгэх ухаалаг хөтөч
+                Шинэ хүн бүртгэж зангидах эсвэл бүртгэлтэй хүмүүсийг хооронд нь ухаалгаар холбох
               </small>
             </div>
           </div>
@@ -364,6 +410,7 @@ export function PedigreeWizardModal({
             type="button"
             onClick={onClose}
             disabled={loading}
+            aria-label="Цонхыг хаах"
             style={{
               width: '32px',
               height: '32px',
@@ -382,10 +429,19 @@ export function PedigreeWizardModal({
         </div>
 
         {/* Modal Scrollable Body */}
-        <form onSubmit={handleSubmit} style={{ overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Error Message */}
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            overflowY: 'auto',
+            padding: '22px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '18px',
+          }}
+        >
           {error && (
             <div
+              role="alert"
               style={{
                 padding: '12px 16px',
                 borderRadius: '10px',
@@ -403,6 +459,71 @@ export function PedigreeWizardModal({
             </div>
           )}
 
+          {/* MODE SWITCHER: CREATE NEW vs LINK EXISTING */}
+          {people.length >= 1 && role !== 'standalone' && (
+            <div
+              role="tablist"
+              aria-label="Холбох горим"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '8px',
+                padding: '5px',
+                borderRadius: '12px',
+                background: '#ede6d6',
+              }}
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'create'}
+                onClick={() => setMode('create')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '7px',
+                  padding: '9px 12px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: mode === 'create' ? '#ffffff' : 'transparent',
+                  color: mode === 'create' ? '#17372b' : '#57685e',
+                  boxShadow: mode === 'create' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                }}
+              >
+                <UserPlus size={15} /> ✨ Шинэ хүн бүртгэж холбох
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'existing'}
+                onClick={() => setMode('existing')}
+                disabled={people.length < 2}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '7px',
+                  padding: '9px 12px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  cursor: people.length < 2 ? 'not-allowed' : 'pointer',
+                  background: mode === 'existing' ? '#ffffff' : 'transparent',
+                  color: mode === 'existing' ? '#b45309' : '#57685e',
+                  boxShadow: mode === 'existing' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                  opacity: people.length < 2 ? 0.5 : 1,
+                }}
+              >
+                <Link2 size={15} /> 🔗 Бүртгэлтэй хүнээс сонгож холбох
+              </button>
+            </div>
+          )}
+
           {/* SECTION 1: ANCHOR PERSON & RELATION ROLE */}
           <div
             style={{
@@ -412,37 +533,63 @@ export function PedigreeWizardModal({
               border: '1px solid var(--parchment-border, #e2d9c8)',
             }}
           >
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#b45309', display: 'block', marginBottom: '6px' }}>
-                1. Тулгуур хүн (Anchor Person):
-              </label>
-              <select
-                value={anchorPersonId}
-                onChange={(e) => setAnchorPersonId(e.target.value)}
-                disabled={loading}
-                className="admin-role-select"
-                style={{ width: '100%', height: '40px', fontSize: '13.5px', fontWeight: 600 }}
-              >
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.last_name} {p.first_name} {p.birth_date ? `(${p.birth_date.slice(0, 4)})` : ''} - {p.gender === 'female' ? 'Эмэгтэй' : 'Эрэгтэй'}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {people.length > 0 && (
+              <div style={{ marginBottom: '12px' }}>
+                <label
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    color: '#b45309',
+                    display: 'block',
+                    marginBottom: '6px',
+                  }}
+                >
+                  1. Тулгуур хүн (Хэнтэй холбох вэ?):
+                </label>
+                <select
+                  value={anchorPersonId}
+                  onChange={(e) => setAnchorPersonId(e.target.value)}
+                  disabled={loading}
+                  className="admin-role-select"
+                  style={{ width: '100%', height: '40px', fontSize: '13.5px', fontWeight: 600 }}
+                >
+                  {people.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.last_name} {p.first_name}{' '}
+                      {p.birth_date ? `(${p.birth_date.slice(0, 4)})` : ''} —{' '}
+                      {p.gender === 'female' ? 'Эмэгтэй' : 'Эрэгтэй'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-            <label style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#b45309', display: 'block', marginBottom: '8px' }}>
-              2. Энэ хүний хэн болох вэ? (Харьцангуй үүрэг):
+            <label
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                color: '#b45309',
+                display: 'block',
+                marginBottom: '8px',
+              }}
+            >
+              2. Энэ хүний хэн болох вэ? (Ургийн хамаарал):
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
               {[
-                { key: 'father', label: '👨‍🦳 Эцэг нэмэх', desc: 'Дээд үе (Эрэгтэй)' },
-                { key: 'mother', label: '👵 Эх нэмэх', desc: 'Дээд үе (Эмэгтэй)' },
-                { key: 'spouse', label: '💍 Хань нэмэх', desc: 'Гэрлэлтийн холбоо' },
-                { key: 'son', label: '👦 Хүү нэмэх', desc: 'Үр сад (Эрэгтэй)' },
-                { key: 'daughter', label: '👧 Охин нэмэх', desc: 'Үр сад (Эмэгтэй)' },
-                { key: 'sibling', label: '🤝 Ах, дүү', desc: 'Зэрэгцээ үе' },
-                { key: 'standalone', label: '⭐ Салангид язгуур', desc: 'Шинэ шугам' },
+                { key: 'father', label: '👨‍🦳 Эцэг', desc: 'Төрсөн / өргөсөн аав' },
+                { key: 'mother', label: '👵 Эх', desc: 'Төрсөн / өргөсөн ээж' },
+                { key: 'spouse', label: '💍 Хань', desc: 'Эхнэр / Нөхөр' },
+                { key: 'son', label: '👦 Хүү', desc: 'Үр хүүхэд (Эрэгтэй)' },
+                { key: 'daughter', label: '👧 Охин', desc: 'Үр хүүхэд (Эмэгтэй)' },
+                { key: 'sibling', label: '🤝 Ах, эгч, дүү', desc: 'Нэг эцэг эхийн хүүхэд' },
+                ...(mode === 'create'
+                  ? [{ key: 'standalone', label: '⭐ Шинэ язгуур', desc: 'Салангид эхлэл' }]
+                  : []),
               ].map((item) => {
                 const isSelected = role === item.key;
                 return (
@@ -455,7 +602,9 @@ export function PedigreeWizardModal({
                       padding: '10px 12px',
                       borderRadius: '10px',
                       textAlign: 'left',
-                      border: isSelected ? '2px solid #d97706' : '1px solid var(--parchment-border, #e2d9c8)',
+                      border: isSelected
+                        ? '2px solid #d97706'
+                        : '1px solid var(--parchment-border, #e2d9c8)',
                       background: isSelected ? 'rgba(217, 119, 6, 0.12)' : '#ffffff',
                       color: isSelected ? '#b45309' : 'var(--ink-primary, #17372b)',
                       cursor: 'pointer',
@@ -469,28 +618,146 @@ export function PedigreeWizardModal({
               })}
             </div>
 
-            {/* Co-parent selector if adding son/daughter */}
-            {(role === 'son' || role === 'daughter') && candidateCoParents.length > 0 && (
-              <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed var(--parchment-border, #e2d9c8)' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-secondary, #485c53)' }}>
-                  Хоёрдогч эцэг/эх (Хань) сонгох:
+            {/* SMART CONTEXTUAL WIRING OPTIONS */}
+            {/* A. Adding Son/Daughter -> Choose Co-Parent (Spouse) */}
+            {(role === 'son' || role === 'daughter') && candidateCoParentsForChild.length > 0 && (
+              <div
+                style={{
+                  marginTop: '14px',
+                  paddingTop: '12px',
+                  borderTop: '1px dashed var(--parchment-border, #e2d9c8)',
+                }}
+              >
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-primary, #17372b)' }}>
+                  Хоёр дахь эцэг/эх (Хань)-тэй нь зэрэг холбох:
                 </label>
                 <select
                   value={coParentId}
                   onChange={(e) => setCoParentId(e.target.value)}
                   className="admin-role-select"
-                  style={{ width: '100%', marginTop: '4px', height: '36px', fontSize: '12px' }}
+                  style={{ width: '100%', marginTop: '4px', height: '36px', fontSize: '12.5px' }}
                 >
-                  <option value="">-- Зөвхөн {anchorPerson ? formatPersonName(anchorPerson) : ''}-тэй холбох --</option>
-                  {candidateCoParents.map((sp) => (
+                  <option value="">
+                    -- Зөвхөн {anchorPerson ? formatPersonName(anchorPerson) : ''}-тэй холбох --
+                  </option>
+                  {candidateCoParentsForChild.map((sp) => (
                     <option key={sp.id} value={sp.id}>
-                      {sp.last_name} {sp.first_name} (Хань)
+                      💍 {sp.last_name} {sp.first_name} (Ханьтай нь хамт эцэг эхээр зангидах)
                     </option>
                   ))}
                 </select>
-                <small style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '3px' }}>
-                  Хүүхэд нэгэн зэрэг хоёр эцэг эхтэйгээ модон дээр зөв салаалж зангидагдана.
+              </div>
+            )}
+
+            {/* B. Adding Father/Mother when other parent already exists -> Auto-marry & apply to siblings */}
+            {(role === 'father' || role === 'mother') && candidateExistingParents.length > 0 && (
+              <div
+                style={{
+                  marginTop: '14px',
+                  paddingTop: '12px',
+                  borderTop: '1px dashed var(--parchment-border, #e2d9c8)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-primary, #17372b)' }}>
+                  Одоо бүртгэлтэй нөгөө эцэг/эх:
+                </label>
+                <select
+                  value={coParentId}
+                  onChange={(e) => setCoParentId(e.target.value)}
+                  className="admin-role-select"
+                  style={{ width: '100%', height: '36px', fontSize: '12.5px' }}
+                >
+                  <option value="">-- Нөгөө эцэг/эхтэй холбохгүй --</option>
+                  {candidateExistingParents.map((ep) => (
+                    <option key={ep.id} value={ep.id}>
+                      {ep.last_name} {ep.first_name} ({ep.gender === 'female' ? 'Эх' : 'Эцэг'})
+                    </option>
+                  ))}
+                </select>
+                {coParentId && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={autoMarryCoparent}
+                        onChange={(e) => setAutoMarryCoparent(e.target.checked)}
+                        style={{ accentColor: '#d97706' }}
+                      />
+                      <span>Эцэг эх хоёрын хооронд автоматаар Гэрлэлтийн холбоос (💍 Хос) үүсгэх</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={applyToSiblings}
+                        onChange={(e) => setApplyToSiblings(e.target.checked)}
+                        style={{ accentColor: '#d97706' }}
+                      />
+                      <span>Төрсөн ах, эгч, дүүст нь мөн адил эцэг/эхээр шууд холбох</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* C. Adding Sibling when anchor has NO parents -> Offer automatic shared parent creation */}
+            {role === 'sibling' && anchorExistingParents.length === 0 && (
+              <div
+                style={{
+                  marginTop: '14px',
+                  padding: '12px',
+                  borderRadius: '10px',
+                  background: 'rgba(217, 119, 6, 0.08)',
+                  border: '1px solid rgba(217, 119, 6, 0.28)',
+                }}
+              >
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#92400e', marginBottom: '6px' }}>
+                  💡 {anchorPerson ? formatPersonName(anchorPerson) : 'Тулгуур хүн'} дээр эцэг эх хараахан бүртгэгдээгүй байна.
+                </div>
+                <small style={{ display: 'block', fontSize: '11.5px', color: '#78350f', marginBottom: '10px' }}>
+                  Ах дүүс модон дээр зэрэгцэн зурагдахын тулд дундын эцэг (эсвэл эх)-ийн нэрийг оруулбал хоёуланг нь автоматаар зангидна:
                 </small>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 110px', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={sharedParentLastName}
+                    onChange={(e) => setSharedParentLastName(e.target.value)}
+                    placeholder="Эцгийн овог"
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #d6cbb5',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={sharedParentFirstName}
+                    onChange={(e) => setSharedParentFirstName(e.target.value)}
+                    placeholder="Эцэг/эхийн нэр *"
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #d6cbb5',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <select
+                    value={sharedParentGender}
+                    onChange={(e) => setSharedParentGender(e.target.value as 'male' | 'female')}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: '8px',
+                      border: '1px solid #d6cbb5',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <option value="male">Эцэг</option>
+                    <option value="female">Эх</option>
+                  </select>
+                </div>
               </div>
             )}
           </div>
@@ -514,110 +781,288 @@ export function PedigreeWizardModal({
                 <AlertTriangle size={15} /> Огнооны логик анхааруулга:
               </div>
               {validationWarnings.map((w, idx) => (
-                <span key={idx} style={{ paddingLeft: '20px' }}>• {w}</span>
+                <span key={idx} style={{ paddingLeft: '20px' }}>
+                  • {w}
+                </span>
               ))}
             </div>
           )}
 
-          {/* SECTION 2: NEW PERSON DETAILS */}
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#b45309', display: 'block', marginBottom: '10px' }}>
-              3. Шинэ хүний мэдээлэл:
-            </label>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '14px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600 }}>
-                Овог (Last Name) *
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Боржигон"
-                  required
-                  disabled={loading}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--parchment-border, #e2d9c8)', marginTop: '4px', fontSize: '13px' }}
+          {/* SECTION 2A: SELECT EXISTING PERSON */}
+          {mode === 'existing' && role !== 'standalone' ? (
+            <div
+              style={{
+                padding: '16px',
+                borderRadius: '14px',
+                background: '#ffffff',
+                border: '1px solid var(--parchment-border, #e2d9c8)',
+              }}
+            >
+              <label
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: '#b45309',
+                  display: 'block',
+                  marginBottom: '8px',
+                }}
+              >
+                3. Холбох бүртгэлтэй хүнээ сонгоно уу:
+              </label>
+              <div style={{ position: 'relative', marginBottom: '10px' }}>
+                <Search
+                  size={15}
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#64748b',
+                  }}
                 />
-              </label>
-
-              <label style={{ fontSize: '12px', fontWeight: 600 }}>
-                Өөрийн нэр (First Name) *
                 <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Батбаяр"
-                  required
-                  disabled={loading}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--parchment-border, #e2d9c8)', marginTop: '4px', fontSize: '13px' }}
+                  type="search"
+                  value={existingSearch}
+                  onChange={(e) => setExistingSearch(e.target.value)}
+                  placeholder="Овог, нэр эсвэл төрсөн оноор хайх…"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px 8px 34px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--parchment-border, #e2d9c8)',
+                    fontSize: '13px',
+                  }}
                 />
-              </label>
+              </div>
 
-              <label style={{ fontSize: '12px', fontWeight: 600 }}>
-                Хүйс *
-                <select
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value as 'male' | 'female')}
-                  disabled={loading || role === 'father' || role === 'mother'}
-                  className="admin-role-select"
-                  style={{ width: '100%', marginTop: '4px', height: '38px', fontSize: '13px' }}
-                >
-                  <option value="male">Эрэгтэй</option>
-                  <option value="female">Эмэгтэй</option>
-                </select>
-              </label>
-
-              <label style={{ fontSize: '12px', fontWeight: 600 }}>
-                Төрсөн огноо (YYYY эсвэл YYYY-MM-DD)
-                <input
-                  type="text"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  placeholder="1985-06-15"
-                  disabled={loading}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--parchment-border, #e2d9c8)', marginTop: '4px', fontSize: '13px' }}
-                />
-              </label>
+              <div
+                style={{
+                  maxHeight: '210px',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                }}
+              >
+                {eligibleExistingPeople.length === 0 ? (
+                  <p style={{ fontSize: '12.5px', color: '#64748b', margin: '8px 0' }}>
+                    Тохирох бүртгэлтэй хүн олдсонгүй.
+                  </p>
+                ) : (
+                  eligibleExistingPeople.map((p) => {
+                    const selected = p.id === existingTargetId;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setExistingTargetId(p.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '9px 12px',
+                          borderRadius: '9px',
+                          border: selected ? '2px solid #d97706' : '1px solid #e2d9c8',
+                          background: selected ? 'rgba(217, 119, 6, 0.1)' : '#fcfaf5',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <div>
+                          <strong style={{ fontSize: '13px', color: '#17372b' }}>
+                            {formatPersonName(p)}
+                          </strong>
+                          <span style={{ fontSize: '11.5px', color: '#64748b', marginLeft: '8px' }}>
+                            {p.gender === 'female' ? 'Эмэгтэй' : 'Эрэгтэй'}
+                            {p.birth_date ? ` · ${p.birth_date.slice(0, 4)}` : ''}
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: selected ? '#b45309' : '#64748b',
+                          }}
+                        >
+                          {selected ? '✓ Сонгосон' : 'Сонгох'}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '14px', alignItems: 'center' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={isAlive}
-                  onChange={(e) => setIsAlive(e.target.checked)}
-                  disabled={loading}
-                  style={{ width: '18px', height: '18px', accentColor: '#d97706' }}
-                />
-                <span>{isAlive ? 'Амьд сэрүүн' : 'Тэнгэрт хальсан'}</span>
+          ) : (
+            /* SECTION 2B: CREATE NEW PERSON DETAILS */
+            <div>
+              <label
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: '#b45309',
+                  display: 'block',
+                  marginBottom: '10px',
+                }}
+              >
+                3. Шинэ хүний мэдээлэл:
               </label>
 
-              {!isAlive && (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '12px',
+                  marginBottom: '14px',
+                }}
+              >
                 <label style={{ fontSize: '12px', fontWeight: 600 }}>
-                  Нас барсан он / огноо:
+                  Эцгийн нэр / Овог (Last Name)
                   <input
                     type="text"
-                    value={deathDate}
-                    onChange={(e) => setDeathDate(e.target.value)}
-                    placeholder="2018"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Боржигон / Дорж"
                     disabled={loading}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--parchment-border, #e2d9c8)', marginTop: '4px', fontSize: '13px' }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--parchment-border, #e2d9c8)',
+                      marginTop: '4px',
+                      fontSize: '13px',
+                    }}
                   />
                 </label>
-              )}
 
-              <label style={{ fontSize: '12px', fontWeight: 600 }}>
-                Ургийн овог / Салбар:
-                <input
-                  type="text"
-                  value={lineageName}
-                  onChange={(e) => setLineageName(e.target.value)}
-                  placeholder="Хиад Боржигон"
-                  disabled={loading}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--parchment-border, #e2d9c8)', marginTop: '4px', fontSize: '13px' }}
-                />
-              </label>
+                <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                  Өөрийн нэр (First Name) *
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Батбаяр"
+                    required
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--parchment-border, #e2d9c8)',
+                      marginTop: '4px',
+                      fontSize: '13px',
+                    }}
+                  />
+                </label>
+
+                <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                  Хүйс *
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value as 'male' | 'female')}
+                    disabled={loading || role === 'father' || role === 'mother'}
+                    className="admin-role-select"
+                    style={{ width: '100%', marginTop: '4px', height: '38px', fontSize: '13px' }}
+                  >
+                    <option value="male">Эрэгтэй</option>
+                    <option value="female">Эмэгтэй</option>
+                  </select>
+                </label>
+
+                <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                  Төрсөн огноо (Он эсвэл YYYY-MM-DD)
+                  <input
+                    type="text"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    placeholder="1985 эсвэл 1985-06-15"
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--parchment-border, #e2d9c8)',
+                      marginTop: '4px',
+                      fontSize: '13px',
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '12px',
+                  marginBottom: '6px',
+                  alignItems: 'center',
+                }}
+              >
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isAlive}
+                    onChange={(e) => setIsAlive(e.target.checked)}
+                    disabled={loading}
+                    style={{ width: '18px', height: '18px', accentColor: '#d97706' }}
+                  />
+                  <span>{isAlive ? '🟢 Амьд сэрүүн' : '🕊️ Тэнгэрт дэвшсэн'}</span>
+                </label>
+
+                {!isAlive && (
+                  <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                    Нас барсан он / огноо:
+                    <input
+                      type="text"
+                      value={deathDate}
+                      onChange={(e) => setDeathDate(e.target.value)}
+                      placeholder="2018"
+                      disabled={loading}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--parchment-border, #e2d9c8)',
+                        marginTop: '4px',
+                        fontSize: '13px',
+                      }}
+                    />
+                  </label>
+                )}
+
+                <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                  Ургийн овог / Дундах нэр:
+                  <input
+                    type="text"
+                    value={lineageName}
+                    onChange={(e) => setLineageName(e.target.value)}
+                    placeholder="Хиад Боржигон"
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--parchment-border, #e2d9c8)',
+                      marginTop: '4px',
+                      fontSize: '13px',
+                    }}
+                  />
+                </label>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Modal Footer Actions */}
           <div
@@ -626,7 +1071,7 @@ export function PedigreeWizardModal({
               alignItems: 'center',
               justifyContent: 'flex-end',
               gap: '12px',
-              paddingTop: '16px',
+              paddingTop: '14px',
               borderTop: '1px solid var(--parchment-border, #e2d9c8)',
             }}
           >
@@ -653,10 +1098,13 @@ export function PedigreeWizardModal({
               }}
             >
               {loading ? (
-                'Бүртгэж байна…'
+                'Зангидаж байна…'
               ) : (
                 <>
-                  <Sparkles size={16} /> Бүртгэж, Ургийн модонд зангидах
+                  <Sparkles size={16} />{' '}
+                  {mode === 'existing' && role !== 'standalone'
+                    ? 'Сонгосон хүнтэй ураг зангидах'
+                    : 'Бүртгэж, Ургийн модонд зангидах'}
                 </>
               )}
             </button>

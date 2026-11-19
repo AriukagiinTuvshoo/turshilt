@@ -469,6 +469,34 @@ function AdminContent() {
     }
   };
 
+  const handleDeleteParentChild = (parentId: string, childId: string) => {
+    if (!selectedFamilyId || actionBusy) return;
+    requestConfirm({
+      title: 'Эцэг эх — Хүүхдийн холбоос салгах',
+      message: 'Энэ эцэг эх болон хүүхдийн хоорондын ургийн холбоосыг салгах уу? (Хүний бүртгэл устгагдахгүй)',
+      confirmLabel: 'Холбоос салгах',
+      variant: 'warning',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setActionBusy(true);
+        setError('');
+        setNotice('');
+        try {
+          await api<void>(
+            `/families/${selectedFamilyId}/relationships/parent-child?parent_id=${encodeURIComponent(parentId)}&child_id=${encodeURIComponent(childId)}`,
+            { method: 'DELETE' },
+          );
+          setNotice('Эцэг эх - Хүүхдийн холбоосыг салгалаа.');
+          await loadDetails(selectedFamilyId);
+        } catch (cause) {
+          setError(friendlyError(cause, 'Ургийн холбоос салгахад алдаа гарлаа.'));
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
+  };
+
   const handleDeleteMarriage = (marriageId: string) => {
     if (!selectedFamilyId || actionBusy) return;
     requestConfirm({
@@ -1151,6 +1179,8 @@ function AdminContent() {
           relChildId={relChildId}
           setRelChildId={setRelChildId}
           handleAddParentChild={handleAddParentChild}
+          parentChildEdges={treeData?.parent_child_relationships || []}
+          handleDeleteParentChild={handleDeleteParentChild}
           marriageP1={marriageP1}
           setMarriageP1={setMarriageP1}
           marriageP2={marriageP2}
