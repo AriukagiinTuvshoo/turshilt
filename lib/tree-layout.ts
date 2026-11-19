@@ -1,4 +1,4 @@
-import { Marriage, TreeData, TreePerson } from './api';
+import type { Marriage, TreeData, TreePerson } from './api';
 
 export const TREE_NODE_WIDTH = 196;
 export const TREE_NODE_HEIGHT = 168;

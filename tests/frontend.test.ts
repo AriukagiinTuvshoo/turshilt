@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { calculateMongolianKinship, type KinshipPerson, type KinshipEdge, type KinshipMarriage } from '../lib/kinship.ts';
 import { exportToGedcom, parseGedcom } from '../lib/gedcom.ts';
 import { findDuplicatePeople, getUpcomingFamilyReminders } from '../lib/duplicates.ts';
+import { buildAdvancedTreeLayout } from '../lib/tree-layout.ts';
 
 describe('Mongolian Traditional Kinship Calculator (lib/kinship.ts)', () => {
   const people: KinshipPerson[] = [
@@ -80,6 +81,22 @@ describe('Mongolian Traditional Kinship Calculator (lib/kinship.ts)', () => {
     const spouse = calculateMongolianKinship('ego', 'wife', people, edges, marriages);
     assert.ok(spouse);
     assert.equal(spouse.lineageType, 'spouse');
+    assert.equal(spouse.nineGenerationsRuleViolated, false);
+  });
+
+  it('handles self and unrelated people accurately', () => {
+    const selfRel = calculateMongolianKinship('ego', 'ego', people, edges, marriages);
+    assert.equal(selfRel.lineageType, 'self');
+
+    const outsider: KinshipPerson = { id: 'stranger', first_name: 'Гадны', last_name: 'Хүн', gender: 'male' };
+    const unrelated = calculateMongolianKinship('ego', 'stranger', [...people, outsider], edges, marriages);
+    assert.equal(unrelated.lineageType, 'unrelated');
+    assert.equal(unrelated.nineGenerationsRuleViolated, false);
+  });
+
+  it('enforces 9-generation rule warning for blood relatives', () => {
+    const cousin = calculateMongolianKinship('ego', 'cousin_pat', people, edges, marriages);
+    assert.equal(cousin.nineGenerationsRuleViolated, true);
   });
 });
 
@@ -136,5 +153,60 @@ describe('Duplicate Detection & Reminders (lib/duplicates.ts)', () => {
     assert.equal(reminders[0].daysUntil, 9);
     assert.equal(reminders[1].kind, 'memorial');
     assert.equal(reminders[1].daysUntil, 19);
+  });
+
+  it('does not flag namesakes across different generations as duplicates', () => {
+    const list = [
+      { id: '1', first_name: 'Бат', last_name: 'Боржигон', gender: 'male', birth_date: '1945-03-10' },
+      { id: '2', first_name: 'Бат', last_name: 'Боржигон', gender: 'male', birth_date: '2005-07-22' },
+    ];
+    const dups = findDuplicatePeople(list);
+    assert.equal(dups.length, 0);
+  });
+});
+
+describe('Advanced Tree Layout Engine (lib/tree-layout.ts)', () => {
+  it('returns an empty layout cleanly when tree has no people', () => {
+    const layout = buildAdvancedTreeLayout({
+      persons: [],
+      parent_child_relationships: [],
+      marriages: [],
+    });
+    assert.equal(layout.nodes.length, 0);
+    assert.equal(layout.unions.length, 0);
+  });
+
+  it('places parents strictly above children with valid non-overlapping coordinates', () => {
+    const layout = buildAdvancedTreeLayout({
+      persons: [
+        { id: 'p1', first_name: 'Дорж', last_name: 'Боржигон', middle_name: null, gender: 'male', birth_date: '1960-01-01', is_alive: true, death_date: null },
+        { id: 'p2', first_name: 'Дулам', last_name: 'Хөх', middle_name: null, gender: 'female', birth_date: '1962-01-01', is_alive: true, death_date: null },
+        { id: 'c1', first_name: 'Тэмүүлэн', last_name: 'Дорж', middle_name: null, gender: 'male', birth_date: '1990-01-01', is_alive: true, death_date: null },
+        { id: 'c2', first_name: 'Номин', last_name: 'Дорж', middle_name: null, gender: 'female', birth_date: '1993-01-01', is_alive: true, death_date: null },
+      ],
+      parent_child_relationships: [
+        { id: 'r1', parent_id: 'p1', child_id: 'c1', relationship_type: 'biological' },
+        { id: 'r2', parent_id: 'p2', child_id: 'c1', relationship_type: 'biological' },
+        { id: 'r3', parent_id: 'p1', child_id: 'c2', relationship_type: 'biological' },
+        { id: 'r4', parent_id: 'p2', child_id: 'c2', relationship_type: 'biological' },
+      ],
+      marriages: [
+        { id: 'm1', person_1_id: 'p1', person_2_id: 'p2', status: 'married', start_date: '1988-06-01', end_date: null },
+      ],
+      root_person_id: 'p1',
+    });
+
+    assert.equal(layout.nodes.length, 4);
+    assert.equal(layout.unions.length, 1);
+
+    const p1 = layout.nodeById.get('p1')!;
+    const p2 = layout.nodeById.get('p2')!;
+    const c1 = layout.nodeById.get('c1')!;
+    const c2 = layout.nodeById.get('c2')!;
+
+    assert.equal(p1.y, p2.y);
+    assert.ok(p1.y < c1.y, 'Parent must render strictly above child');
+    assert.equal(c1.y, c2.y);
+    assert.notEqual(c1.x, c2.x, 'Siblings must not overlap horizontally');
   });
 });

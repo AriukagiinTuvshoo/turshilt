@@ -31,7 +31,7 @@ export interface KinshipMarriage {
 export interface KinshipResult {
   relationshipName: string;
   generationDifference: number; // e.g., 0 = same generation, +1 = older generation, -1 = younger
-  lineageType: 'direct_ancestor' | 'direct_descendant' | 'sibling' | 'paternal_collateral' | 'maternal_collateral' | 'in_law' | 'spouse' | 'unrelated';
+  lineageType: 'self' | 'direct_ancestor' | 'direct_descendant' | 'sibling' | 'paternal_collateral' | 'maternal_collateral' | 'in_law' | 'spouse' | 'unrelated';
   pathDescription: string;
   nineGenerationsRuleViolated: boolean;
   degreeOfConsanguinity: number; // 1 = parent/child, 2 = siblings/grandparent, 3 = uncle/aunt/nephew, 4 = first cousins, etc.
@@ -53,9 +53,9 @@ export function calculateMongolianKinship(
     return {
       relationshipName: 'Өөрөө (Би)',
       generationDifference: 0,
-      lineageType: 'unrelated',
+      lineageType: 'self',
       pathDescription: 'Нэг хүн',
-      nineGenerationsRuleViolated: true,
+      nineGenerationsRuleViolated: false,
       degreeOfConsanguinity: 0,
       culturalAdvice: 'Өөрийн хувийн мэдээлэл.',
     };
