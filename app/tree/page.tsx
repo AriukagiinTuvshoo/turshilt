@@ -21,7 +21,6 @@ import {
   personName,
   TreeData,
   TreePerson,
-  KinshipResult,
 } from '../../lib/api';
 import {
   AdvancedTreeLayout,
@@ -125,13 +124,8 @@ function TreePageContent() {
   const [relation, setRelation] = useState<RelationKind | null>(null);
   const [relationError, setRelationError] = useState('');
 
-  // Kinship Modal State
-  const [kinshipOpen, setKinshipOpen] = useState(false);
-  const [kinshipPerson1Id, setKinshipPerson1Id] = useState('');
-  const [kinshipPerson2Id, setKinshipPerson2Id] = useState('');
-  const [kinshipLoading, setKinshipLoading] = useState(false);
-  const [kinshipError, setKinshipError] = useState('');
-  const [kinshipResult, setKinshipResult] = useState<KinshipResult | null>(null);
+  // Kinship Modal State (Unified Mongolian Kinship Calculator)
+  const [kinshipInitialPersonId, setKinshipInitialPersonId] = useState<string>('');
 
   // Bloodline Highlight & Interaction States
   const [bloodlineMode, setBloodlineMode] = useState<BloodlineMode>('none');
@@ -404,23 +398,6 @@ function TreePageContent() {
       const targetX = -(node.x + node.width / 2) * zoom + container.clientWidth / 2;
       const targetY = -(node.y + node.height / 2) * zoom + container.clientHeight / 2;
       setPan({ x: Math.round(targetX), y: Math.round(targetY) });
-    }
-  };
-
-  const calculateKinship = async () => {
-    if (!familyId || !kinshipPerson1Id || !kinshipPerson2Id) return;
-    setKinshipLoading(true);
-    setKinshipError('');
-    setKinshipResult(null);
-    try {
-      const res = await api<KinshipResult>(
-        `/families/${encodeURIComponent(familyId)}/kinship?person_1_id=${encodeURIComponent(kinshipPerson1Id)}&person_2_id=${encodeURIComponent(kinshipPerson2Id)}`,
-      );
-      setKinshipResult(res);
-    } catch (err) {
-      setKinshipError(treeFriendlyError(err, 'Ураг төрлийн хамаарлыг тооцоолоход алдаа гарлаа.'));
-    } finally {
-      setKinshipLoading(false);
     }
   };
 
@@ -1029,8 +1006,8 @@ function TreePageContent() {
                     boxShadow: '0 2px 6px rgba(217, 119, 6, 0.25)',
                   }}
                   onClick={() => {
-                    if (selectedId) setKinshipPerson1Id(selectedId);
-                    setKinshipOpen(true);
+                    setKinshipInitialPersonId(selectedId || '');
+                    setKinshipModalOpen(true);
                   }}
                 >
                   🧬 Ураг холбоо шалгах
@@ -1423,8 +1400,8 @@ function TreePageContent() {
                 }}
                 onCenterPerson={(pid) => centerOnPerson(pid)}
                 onOpenKinship={(pid) => {
-                  setKinshipPerson1Id(pid);
-                  setKinshipOpen(true);
+                  setKinshipInitialPersonId(pid);
+                  setKinshipModalOpen(true);
                 }}
                 onAddRelation={(type) => {
                   setWizardAnchorId(selectedId);
@@ -1532,139 +1509,6 @@ function TreePageContent() {
         </div>
       )}
 
-      {kinshipOpen && (
-        <div className="tree-modal-backdrop" role="dialog" aria-modal="true" aria-label="Ураг төрлийн хамаарал шалгах">
-          <section className="tree-modal" style={{ maxWidth: '520px', width: '100%' }}>
-            <div className="tree-modal-head">
-              <h2>🧬 Монгол 9 үеийн ураг холбоо шалгах</h2>
-              <button
-                type="button"
-                className="tree-modal-close"
-                onClick={() => setKinshipOpen(false)}
-                aria-label="Хаах"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="tree-modal-form">
-              <label>
-                <span>Эхний хүн:</span>
-                <select
-                  value={kinshipPerson1Id}
-                  onChange={(e) => setKinshipPerson1Id(e.target.value)}
-                >
-                  <option value="">-- Хүн сонгох --</option>
-                  {tree?.persons.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {personName(p)} {p.birth_date ? `(${p.birth_date.slice(0, 4)})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                <span>Хоёр дахь хүн:</span>
-                <select
-                  value={kinshipPerson2Id}
-                  onChange={(e) => setKinshipPerson2Id(e.target.value)}
-                >
-                  <option value="">-- Хүн сонгох --</option>
-                  {tree?.persons.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {personName(p)} {p.birth_date ? `(${p.birth_date.slice(0, 4)})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="tree-modal-actions" style={{ marginTop: '14px' }}>
-                <button
-                  type="button"
-                  className="tree-button tree-button--secondary"
-                  onClick={() => setKinshipOpen(false)}
-                >
-                  Хаах
-                </button>
-                <button
-                  type="button"
-                  className="tree-button tree-button--primary"
-                  onClick={calculateKinship}
-                  disabled={!kinshipPerson1Id || !kinshipPerson2Id || kinshipLoading}
-                >
-                  {kinshipLoading ? 'Тооцоолж байна…' : 'Шалгах'}
-                </button>
-              </div>
-
-              {kinshipError && (
-                <p className="tree-notice tree-notice--error" role="alert" style={{ marginTop: '10px' }}>
-                  {kinshipError}
-                </p>
-              )}
-
-              {kinshipResult && (
-                <div
-                  style={{
-                    marginTop: '16px',
-                    padding: '16px',
-                    borderRadius: '12px',
-                    background: 'rgba(7, 50, 40, 0.08)',
-                    border: '1px solid rgba(208, 194, 158, 0.4)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                    <strong style={{ fontSize: '18px', color: '#17372a' }}>
-                      {kinshipResult.relationship_title}
-                    </strong>
-                    {kinshipResult.lineage_label && (
-                      <span
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          background: kinshipResult.lineage_type === 'paternal' ? '#d9b85d' : '#497c6c',
-                          color: '#07241d',
-                        }}
-                      >
-                        {kinshipResult.lineage_label}
-                      </span>
-                    )}
-                  </div>
-
-                  <p style={{ margin: '8px 0 4px', fontSize: '13px', color: '#45584e' }}>
-                    {kinshipResult.description}
-                  </p>
-
-                  {kinshipResult.coefficient > 0 && (
-                    <p style={{ margin: '4px 0', fontSize: '12px', color: '#66776e' }}>
-                      Цусны хамаарлын коэффициент (r): <strong>{(kinshipResult.coefficient * 100).toFixed(1)}%</strong>
-                    </p>
-                  )}
-
-                  {kinshipResult.inbreeding_warning && (
-                    <div
-                      style={{
-                        marginTop: '12px',
-                        padding: '10px 14px',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        lineHeight: '1.5',
-                        background: kinshipResult.within_9_generations ? 'rgba(235, 87, 87, 0.12)' : 'rgba(39, 174, 96, 0.12)',
-                        color: kinshipResult.within_9_generations ? '#9c1c1c' : '#146333',
-                        border: `1px solid ${kinshipResult.within_9_generations ? 'rgba(235, 87, 87, 0.3)' : 'rgba(39, 174, 96, 0.3)'}`,
-                      }}
-                    >
-                      {kinshipResult.inbreeding_warning}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
-
       {/* Vector Print & Wall Art Export Modal */}
       <TreeExportModal
         isOpen={exportModalOpen}
@@ -1699,7 +1543,7 @@ function TreePageContent() {
         people={tree?.persons ?? []}
         relationships={tree?.parent_child_relationships ?? []}
         marriages={tree?.marriages ?? []}
-        initialPersonAId={selectedId || undefined}
+        initialPersonAId={kinshipInitialPersonId || selectedId || undefined}
       />
     </main>
   );

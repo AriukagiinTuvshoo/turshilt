@@ -69,14 +69,22 @@ export function FamilyChatDrawer({ familyId, currentUserId }: FamilyChatDrawerPr
     }
   }, [familyId, loadMembers, loadMessages]);
 
-  // Polling loop
+  // Polling loop (pauses when tab is hidden, refreshes immediately on focus)
   useEffect(() => {
     if (!familyId) return;
     const intervalMs = isOpen ? 2500 : 12000;
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       void loadMessages(false);
     }, intervalMs);
-    return () => clearInterval(interval);
+    const onVisibility = () => {
+      if (!document.hidden) void loadMessages(false);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [familyId, isOpen, loadMessages]);
 
   // Reset unread count when opened

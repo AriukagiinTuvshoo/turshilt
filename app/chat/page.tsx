@@ -102,13 +102,21 @@ function ChatContent() {
     }
   }, [familyId, loadMembers, loadMessages]);
 
-  // Polling loop for real-time messages
+  // Polling loop for real-time messages (pauses when tab is hidden)
   useEffect(() => {
     if (!familyId) return;
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       void loadMessages(false);
     }, 3000);
-    return () => clearInterval(interval);
+    const onVisibility = () => {
+      if (!document.hidden) void loadMessages(false);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [familyId, loadMessages]);
 
   // Scroll to bottom when conversation changes or messages arrive

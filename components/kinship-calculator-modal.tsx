@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -36,6 +36,17 @@ export function KinshipCalculatorModal({
   const [personBId, setPersonBId] = useState<string>(people[1]?.id ?? people[0]?.id ?? '');
   const [searchA, setSearchA] = useState('');
   const [searchB, setSearchB] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const nextA = initialPersonAId || people[0]?.id || '';
+    setPersonAId(nextA);
+    setPersonBId((prev) => {
+      if (prev && prev !== nextA && people.some((p) => p.id === prev)) return prev;
+      const other = people.find((p) => p.id !== nextA);
+      return other?.id ?? nextA;
+    });
+  }, [isOpen, initialPersonAId, people]);
 
   const personA = useMemo(() => people.find((p) => p.id === personAId), [people, personAId]);
   const personB = useMemo(() => people.find((p) => p.id === personBId), [people, personBId]);
