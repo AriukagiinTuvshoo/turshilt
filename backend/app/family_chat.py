@@ -1,9 +1,15 @@
-"""Family Messenger / Real-Time Family Chat endpoints."""
+"""Family Messenger / Real-Time Family Chat endpoints with Server-Sent Events (SSE)."""
 
+import asyncio
+import json
+import threading
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
@@ -21,6 +27,22 @@ from app.models import (
 from app.permissions import _audit, _member
 
 router = APIRouter()
+
+_subscribers_lock = threading.Lock()
+_chat_subscribers: dict[
+    UUID, list[tuple[asyncio.AbstractEventLoop, asyncio.Queue[dict[str, Any]]]]
+] = defaultdict(list)
+
+
+def publish_chat_event(family_id: UUID, event_payload: dict[str, Any]) -> None:
+    """Broadcast a real-time chat notification to active SSE subscribers in this family."""
+    with _subscribers_lock:
+        targets = list(_chat_subscribers.get(family_id, ()))
+    for loop, queue in targets:
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, event_payload)
+        except RuntimeError:
+            continue
 
 
 class ChatMessageInput(BaseModel):
@@ -80,7 +102,9 @@ def list_chat_members(
 
     result: list[ChatMemberOut] = []
     for r in rows:
-        p_name = f"{r.last_name + ' ' if r.last_name else ''}{r.first_name}" if r.first_name else None
+        p_name = (
+            f"{r.last_name + ' ' if r.last_name else ''}{r.first_name}" if r.first_name else None
+        )
         result.append(
             ChatMemberOut(
                 user_id=r.id,
@@ -133,9 +157,7 @@ def list_chat_messages(
             )
         )
 
-    rows = db.execute(
-        query.order_by(ChatMessage.created_at.desc()).limit(capped_limit)
-    ).all()
+    rows = db.execute(query.order_by(ChatMessage.created_at.desc()).limit(capped_limit)).all()
 
     reversed_rows = list(reversed(rows))
     return [
@@ -153,6 +175,63 @@ def list_chat_messages(
     ]
 
 
+@router.get("/{family_id}/chat/stream")
+async def stream_chat_events(
+    family_id: UUID,
+    request: Request,
+    once: bool = Query(default=False, description="Emit initial frame and close (for tests)."),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Server-Sent Events stream notifying family members of new or deleted chat messages."""
+    _member(db, family_id, user)
+    user_id_str = str(user.id)
+    family_id_str = str(family_id)
+
+    async def event_generator():
+        initial = json.dumps({"status": "ok", "family_id": family_id_str})
+        yield f"event: connected\ndata: {initial}\n\n"
+        if once:
+            return
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        entry = (loop, queue)
+        with _subscribers_lock:
+            _chat_subscribers[family_id].append(entry)
+
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+
+                rec_id = event.get("recipient_id")
+                snd_id = event.get("sender_id")
+                if rec_id is None or rec_id == user_id_str or snd_id == user_id_str:
+                    yield f"event: chat_update\ndata: {json.dumps(event)}\n\n"
+        finally:
+            with _subscribers_lock:
+                subs = _chat_subscribers.get(family_id)
+                if subs and entry in subs:
+                    subs.remove(entry)
+                if subs is not None and not subs:
+                    _chat_subscribers.pop(family_id, None)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post("/{family_id}/chat/messages", response_model=ChatMessageOut)
 def send_chat_message(
     family_id: UUID,
@@ -165,15 +244,17 @@ def send_chat_message(
     if not body:
         raise HTTPException(status_code=422, detail="Зурвас хоосон байж болохгүй.")
 
-    # Rate limit: max 30 messages per minute per sender in family
     cutoff = datetime.now(UTC) - timedelta(seconds=60)
-    recent_count = db.scalar(
-        select(func.count(ChatMessage.id)).where(
-            ChatMessage.family_id == family_id,
-            ChatMessage.sender_id == user.id,
-            ChatMessage.created_at >= cutoff,
+    recent_count = (
+        db.scalar(
+            select(func.count(ChatMessage.id)).where(
+                ChatMessage.family_id == family_id,
+                ChatMessage.sender_id == user.id,
+                ChatMessage.created_at >= cutoff,
+            )
         )
-    ) or 0
+        or 0
+    )
     if recent_count >= 30:
         raise HTTPException(
             status_code=429,
@@ -202,6 +283,16 @@ def send_chat_message(
     _audit(db, user, family_id, "chat.message_sent", "chat_message", msg.id)
     db.commit()
     db.refresh(msg)
+
+    publish_chat_event(
+        family_id,
+        {
+            "type": "message_created",
+            "message_id": str(msg.id),
+            "sender_id": str(user.id),
+            "recipient_id": str(msg.recipient_id) if msg.recipient_id else None,
+        },
+    )
 
     return ChatMessageOut(
         id=msg.id,
@@ -236,7 +327,20 @@ def delete_chat_message(
     if msg.sender_id != user.id and not is_admin:
         raise HTTPException(status_code=403, detail="Бусдын зурвасыг устгах эрхгүй.")
 
+    sender_id_str = str(msg.sender_id)
+    recipient_id_str = str(msg.recipient_id) if msg.recipient_id else None
+
     _audit(db, user, family_id, "chat.message_deleted", "chat_message", msg.id)
     db.delete(msg)
     db.commit()
+
+    publish_chat_event(
+        family_id,
+        {
+            "type": "message_deleted",
+            "message_id": str(message_id),
+            "sender_id": sender_id_str,
+            "recipient_id": recipient_id_str,
+        },
+    )
     return Response(status_code=204)

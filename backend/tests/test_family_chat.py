@@ -86,3 +86,25 @@ def test_family_chat_broadcast_and_direct(client, database):
         f"/api/v1/families/{family_id}/chat/messages",
         json={"content": "Би хамаагүй хүн"},
     ).status_code == 403
+
+
+def test_family_chat_sse_stream_auth_and_event_delivery(client):
+    assert register_verified(client, "sse-owner@example.com").status_code == 201
+    family_id = client.post("/api/v1/families", json={"name": "SSE Чат"}).json()["id"]
+
+    # Authorized member receives event: connected SSE stream
+    stream_res = client.get(f"/api/v1/families/{family_id}/chat/stream?once=true")
+    assert stream_res.status_code == 200
+    assert stream_res.headers["content-type"].startswith("text/event-stream")
+    assert "no-cache" in stream_res.headers.get("cache-control", "").lower()
+    assert "event: connected" in stream_res.text
+    assert family_id in stream_res.text
+
+    # Non-member receives 403
+    client.post("/api/v1/auth/logout")
+    assert register_verified(client, "sse-stranger@example.com").status_code == 201
+    assert client.get(f"/api/v1/families/{family_id}/chat/stream?once=true").status_code == 403
+
+    # Unauthenticated user receives 401
+    client.post("/api/v1/auth/logout")
+    assert client.get(f"/api/v1/families/{family_id}/chat/stream?once=true").status_code == 401

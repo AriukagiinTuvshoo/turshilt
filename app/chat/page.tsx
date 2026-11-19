@@ -15,7 +15,7 @@ import {
   User,
   Users,
 } from 'lucide-react';
-import { api, ChatMember, ChatMessage, User as CurrentUser } from '../../lib/api';
+import { api, API_BASE, ChatMember, ChatMessage, User as CurrentUser } from '../../lib/api';
 
 function ChatContent() {
   const searchParams = useSearchParams();
@@ -112,18 +112,52 @@ function ChatContent() {
     }
   }, [familyId, loadMembers, loadMessages]);
 
-  // Polling loop for real-time messages (pauses when tab is hidden)
+  // Real-time Server-Sent Events (SSE) subscription (pauses when tab is hidden, 30s safety fallback)
   useEffect(() => {
     if (!familyId) return;
+    let source: EventSource | null = null;
+
+    const connectStream = () => {
+      if (typeof window === 'undefined' || typeof EventSource === 'undefined' || !API_BASE) return;
+      if (document.hidden || source) return;
+      try {
+        source = new EventSource(
+          `${API_BASE}/families/${encodeURIComponent(familyId)}/chat/stream`,
+          { withCredentials: true },
+        );
+        source.addEventListener('chat_update', () => {
+          void loadMessages(false);
+        });
+      } catch {
+        source = null;
+      }
+    };
+
+    const disconnectStream = () => {
+      if (source) {
+        source.close();
+        source = null;
+      }
+    };
+
+    connectStream();
+
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
       void loadMessages(false);
-    }, 3000);
+    }, 30000);
+
     const onVisibility = () => {
-      if (!document.hidden) void loadMessages(false);
+      if (document.hidden) {
+        disconnectStream();
+      } else {
+        connectStream();
+        void loadMessages(false);
+      }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      disconnectStream();
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
