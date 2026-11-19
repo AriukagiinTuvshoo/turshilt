@@ -99,6 +99,11 @@ from app.privacy import (
     active_guardian_scopes,
     person_is_minor,
 )
+from app.relationships import (
+    RelationshipError,
+    assert_parent_child_is_acyclic,
+    canonical_pair,
+)
 
 router = APIRouter(prefix="/families", tags=["families"])
 invitations_router = APIRouter(prefix="/invitations", tags=["invitations"])
@@ -138,6 +143,24 @@ class FamilyOut(BaseModel):
     role: str
     permissions: list[str] = Field(default_factory=list)
     admin_title: str | None = None
+    parent_family_id: UUID | None = None
+    parent_family_name: str | None = None
+
+
+class ConnectHouseholdInput(BaseModel):
+    target_family_id: UUID
+    household_person_id: UUID
+    target_anchor_person_id: UUID
+    relation: str = Field(pattern="^(child_of|parent_of|spouse_of|same_person)$")
+
+
+class ConnectHouseholdOut(BaseModel):
+    household_family_id: UUID
+    target_family_id: UUID
+    target_family_name: str
+    linked_persons_count: int
+    bridge_relation: str
+    summary: str
 
 
 class LineageCreate(BaseModel):
@@ -365,6 +388,36 @@ def _lineage_in_member_family(db: Session, lineage_id: UUID, user: User) -> Line
     return lineage
 
 
+def _family_out(
+    family: Family,
+    member: FamilyMember,
+    parent_names: dict[UUID, str] | None = None,
+) -> FamilyOut:
+    parent_name = (
+        parent_names.get(family.parent_family_id)
+        if parent_names and family.parent_family_id is not None
+        else None
+    )
+    return FamilyOut(
+        id=family.id,
+        name=family.name,
+        description=family.description,
+        created_at=family.created_at,
+        role=member.role,
+        permissions=effective_permissions(member),
+        admin_title=member.admin_title,
+        parent_family_id=family.parent_family_id,
+        parent_family_name=parent_name,
+    )
+
+
+def _single_parent_name(db: Session, family: Family) -> dict[UUID, str]:
+    if family.parent_family_id is None:
+        return {}
+    parent_name = db.scalar(select(Family.name).where(Family.id == family.parent_family_id))
+    return {family.parent_family_id: parent_name} if parent_name is not None else {}
+
+
 @router.post("", response_model=FamilyOut, status_code=201)
 def create_family(
     body: FamilyCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -378,15 +431,7 @@ def create_family(
     _audit(db, user, family.id, "family.created", "family", family.id)
     db.commit()
     db.refresh(family)
-    return FamilyOut(
-        id=family.id,
-        name=family.name,
-        description=family.description,
-        created_at=family.created_at,
-        role=member.role,
-        permissions=effective_permissions(member),
-        admin_title=member.admin_title,
-    )
+    return _family_out(family, member)
 
 
 @router.get("", response_model=list[FamilyOut])
@@ -397,18 +442,16 @@ def list_families(user: User = Depends(get_current_user), db: Session = Depends(
         .where(FamilyMember.user_id == user.id, Family.archived_at.is_(None))
         .order_by(Family.created_at)
     ).all()
-    return [
-        FamilyOut(
-            id=f.id,
-            name=f.name,
-            description=f.description,
-            created_at=f.created_at,
-            role=m.role,
-            permissions=effective_permissions(m),
-            admin_title=m.admin_title,
-        )
-        for f, m in rows
-    ]
+    parent_ids = {f.parent_family_id for f, _ in rows if f.parent_family_id is not None}
+    parent_names: dict[UUID, str] = {}
+    if parent_ids:
+        parent_names = {
+            pid: pname
+            for pid, pname in db.execute(
+                select(Family.id, Family.name).where(Family.id.in_(parent_ids))
+            ).all()
+        }
+    return [_family_out(f, m, parent_names) for f, m in rows]
 
 
 @router.get("/{family_id}", response_model=FamilyOut)
@@ -416,15 +459,7 @@ def get_family(
     family_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     member, family = _member(db, family_id, user)
-    return FamilyOut(
-        id=family.id,
-        name=family.name,
-        description=family.description,
-        created_at=family.created_at,
-        role=member.role,
-        permissions=effective_permissions(member),
-        admin_title=member.admin_title,
-    )
+    return _family_out(family, member, _single_parent_name(db, family))
 
 
 @router.patch("/{family_id}", response_model=FamilyOut)
@@ -440,14 +475,257 @@ def update_family(
     _audit(db, user, family_id, "family.updated", "family", family.id)
     db.commit()
     db.refresh(family)
-    return FamilyOut(
-        id=family.id,
-        name=family.name,
-        description=family.description,
-        created_at=family.created_at,
-        role=member.role,
-        permissions=effective_permissions(member),
-        admin_title=member.admin_title,
+    return _family_out(family, member, _single_parent_name(db, family))
+
+
+@router.post("/{family_id}/connect-to-clan", response_model=ConnectHouseholdOut)
+def connect_household_to_clan(
+    family_id: UUID,
+    body: ConnectHouseholdInput,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Connect a personal household family branch onto a chosen anchor person in the main clan."""
+    if family_id == body.target_family_id:
+        raise HTTPException(status_code=400, detail="Ижил гэр бүлийг өөртэй нь холбох боломжгүй.")
+
+    _, household_family = _member(db, family_id, user, permission="manage_people")
+    target_member, target_family = _member(db, body.target_family_id, user)
+
+    ancestor_id = target_family.parent_family_id
+    visited_families: set[UUID] = {target_family.id}
+    while ancestor_id is not None:
+        if ancestor_id == family_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Өрх болон их ургийн мод хоорондоо тойрог холбоос үүсгэх боломжгүй.",
+            )
+        if ancestor_id in visited_families:
+            break
+        visited_families.add(ancestor_id)
+        ancestor_id = db.scalar(select(Family.parent_family_id).where(Family.id == ancestor_id))
+
+    household_person = _person_in_family(db, family_id, body.household_person_id)
+    target_anchor = _person_in_family(db, target_family.id, body.target_anchor_person_id)
+
+    household_person_ids = set(
+        db.scalars(select(FamilyPerson.person_id).where(FamilyPerson.family_id == family_id)).all()
+    )
+    target_person_ids = set(
+        db.scalars(
+            select(FamilyPerson.person_id).where(FamilyPerson.family_id == target_family.id)
+        ).all()
+    )
+
+    newly_attached = 0
+
+    if body.relation == "same_person":
+        own_linked_person_id = db.scalar(
+            select(UserPersonLink.person_id).where(UserPersonLink.user_id == user.id)
+        )
+        if not (
+            has_permission(target_member, "manage_people")
+            or target_anchor.id == own_linked_person_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Бусдын бүртгэлтэй хүнийг ижил хүн болгож нэгтгэх эрхгүй байна.",
+            )
+
+        if household_person.id != target_anchor.id:
+            combined_ids = household_person_ids | target_person_ids
+            existing_pc_rows = list(
+                db.scalars(
+                    select(ParentChildRelationship).where(
+                        ParentChildRelationship.parent_id.in_(combined_ids),
+                        ParentChildRelationship.child_id.in_(combined_ids),
+                    )
+                ).all()
+            )
+            existing_pc_pairs: set[tuple[UUID, UUID]] = {
+                (row.parent_id, row.child_id) for row in existing_pc_rows
+            }
+            for pc in existing_pc_rows:
+                touches_household = (
+                    (pc.parent_id == household_person.id and pc.child_id in household_person_ids)
+                    or (pc.child_id == household_person.id and pc.parent_id in household_person_ids)
+                )
+                if not touches_household:
+                    continue
+                new_parent = target_anchor.id if pc.parent_id == household_person.id else pc.parent_id
+                new_child = target_anchor.id if pc.child_id == household_person.id else pc.child_id
+                if new_parent == new_child or (new_parent, new_child) in existing_pc_pairs:
+                    existing_pc_pairs.discard((pc.parent_id, pc.child_id))
+                    db.delete(pc)
+                    db.flush()
+                    continue
+                other_edges = [
+                    pair for pair in existing_pc_pairs if pair != (pc.parent_id, pc.child_id)
+                ]
+                try:
+                    assert_parent_child_is_acyclic(other_edges, new_parent, new_child)
+                except RelationshipError as exc:
+                    raise HTTPException(status_code=409, detail=str(exc)) from exc
+                existing_pc_pairs.discard((pc.parent_id, pc.child_id))
+                existing_pc_pairs.add((new_parent, new_child))
+                pc.parent_id = new_parent
+                pc.child_id = new_child
+                db.flush()
+
+            household_marriages = list(
+                db.scalars(
+                    select(Marriage).where(
+                        Marriage.deleted_at.is_(None),
+                        Marriage.person_1_id.in_(household_person_ids),
+                        Marriage.person_2_id.in_(household_person_ids),
+                    )
+                ).all()
+            )
+            target_active_marriages = {
+                (m.person_1_id, m.person_2_id)
+                for m in db.scalars(
+                    select(Marriage).where(
+                        Marriage.deleted_at.is_(None),
+                        Marriage.status == "married",
+                        or_(
+                            Marriage.person_1_id == target_anchor.id,
+                            Marriage.person_2_id == target_anchor.id,
+                        ),
+                    )
+                ).all()
+            }
+            for m in household_marriages:
+                if household_person.id not in (m.person_1_id, m.person_2_id):
+                    continue
+                other_id = m.person_2_id if m.person_1_id == household_person.id else m.person_1_id
+                if other_id == target_anchor.id:
+                    db.delete(m)
+                    db.flush()
+                    continue
+                p1, p2 = canonical_pair(target_anchor.id, other_id)
+                if m.status == "married" and (p1, p2) in target_active_marriages:
+                    db.delete(m)
+                    db.flush()
+                    continue
+                m.person_1_id = p1
+                m.person_2_id = p2
+                db.flush()
+                if m.status == "married":
+                    target_active_marriages.add((p1, p2))
+
+            household_link = db.scalar(
+                select(UserPersonLink).where(UserPersonLink.person_id == household_person.id)
+            )
+            target_link = db.scalar(
+                select(UserPersonLink).where(UserPersonLink.person_id == target_anchor.id)
+            )
+            if household_link is not None and (
+                household_link.user_id == user.id or has_permission(target_member, "manage_members")
+            ):
+                if target_link is None:
+                    household_link.person_id = target_anchor.id
+                else:
+                    db.delete(household_link)
+                db.flush()
+
+            if target_anchor.id not in household_person_ids:
+                db.add(FamilyPerson(family_id=family_id, person_id=target_anchor.id, added_by=user.id))
+                db.flush()
+            old_fp = db.scalar(
+                select(FamilyPerson).where(
+                    FamilyPerson.family_id == family_id,
+                    FamilyPerson.person_id == household_person.id,
+                )
+            )
+            if old_fp is not None:
+                db.delete(old_fp)
+                db.flush()
+
+            for pid in household_person_ids:
+                if pid == household_person.id:
+                    continue
+                if pid not in target_person_ids:
+                    db.add(FamilyPerson(family_id=target_family.id, person_id=pid, added_by=user.id))
+                    target_person_ids.add(pid)
+                    newly_attached += 1
+    else:
+        for pid in household_person_ids:
+            if pid not in target_person_ids:
+                db.add(FamilyPerson(family_id=target_family.id, person_id=pid, added_by=user.id))
+                target_person_ids.add(pid)
+                newly_attached += 1
+
+        combined_ids = household_person_ids | target_person_ids
+        combined_edges = [
+            (row[0], row[1])
+            for row in db.execute(
+                select(ParentChildRelationship.parent_id, ParentChildRelationship.child_id).where(
+                    ParentChildRelationship.parent_id.in_(combined_ids),
+                    ParentChildRelationship.child_id.in_(combined_ids),
+                )
+            ).all()
+        ]
+
+        if body.relation in {"child_of", "parent_of"}:
+            parent_id, child_id = (
+                (target_anchor.id, household_person.id)
+                if body.relation == "child_of"
+                else (household_person.id, target_anchor.id)
+            )
+            try:
+                assert_parent_child_is_acyclic(combined_edges, parent_id, child_id)
+            except RelationshipError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            if (parent_id, child_id) not in set(combined_edges):
+                db.add(
+                    ParentChildRelationship(
+                        parent_id=parent_id,
+                        child_id=child_id,
+                        relationship_type="biological",
+                        created_by=user.id,
+                    )
+                )
+        else:
+            try:
+                p1, p2 = canonical_pair(household_person.id, target_anchor.id)
+            except RelationshipError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            existing_marriage = db.scalar(
+                select(Marriage).where(
+                    Marriage.person_1_id == p1,
+                    Marriage.person_2_id == p2,
+                    Marriage.status == "married",
+                    Marriage.deleted_at.is_(None),
+                )
+            )
+            if existing_marriage is None:
+                db.add(
+                    Marriage(
+                        person_1_id=p1,
+                        person_2_id=p2,
+                        status="married",
+                        created_by=user.id,
+                    )
+                )
+
+    household_family.parent_family_id = target_family.id
+    _audit(db, user, family_id, "household.connected_to_clan", "family", target_family.id)
+    _audit(db, user, target_family.id, "household.connected_to_clan", "family", family_id)
+    _commit(db, "Өрх гэр бүлийг их ургийн модтой холбох үед зөрчил гарлаа.")
+
+    relation_labels = {
+        "child_of": f"«{household_person.first_name}» -> «{target_anchor.first_name}»-ийн үр хүүхэд",
+        "parent_of": f"«{household_person.first_name}» -> «{target_anchor.first_name}»-ийн эцэг/эх",
+        "spouse_of": f"«{household_person.first_name}» болон «{target_anchor.first_name}» гэрлэлт",
+        "same_person": f"«{household_person.first_name}» болон «{target_anchor.first_name}» ижил хүн",
+    }
+    return ConnectHouseholdOut(
+        household_family_id=household_family.id,
+        target_family_id=target_family.id,
+        target_family_name=target_family.name,
+        linked_persons_count=newly_attached,
+        bridge_relation=body.relation,
+        summary=f"«{household_family.name}» өрхийг «{target_family.name}» модтой холболоо ({relation_labels[body.relation]}, шинээр {newly_attached} хүн нэмэгдлээ).",
     )
 
 
@@ -1782,6 +2060,8 @@ __all__ = [
     "BiographyInput",
     "BranchCreate",
     "BranchOut",
+    "ConnectHouseholdInput",
+    "ConnectHouseholdOut",
     "ExtractedEventDraft",
     "FamilyAdminOverviewOut",
     "FamilyCreate",

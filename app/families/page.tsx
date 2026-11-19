@@ -2,470 +2,318 @@
 
 import Link from 'next/link';
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  ShieldCheck,
-  Users,
-  UserCheck,
-  UserPlus,
-  Trash2,
-  Edit3,
-  Mail,
-  Calendar,
-  ArrowRight,
-  Clock,
-  TreeDeciduous,
-  Sparkles,
   AlertCircle,
+  ArrowRight,
   CheckCircle2,
-  UserRound,
-  Shield,
+  GitFork,
+  Link2,
+  Plus,
+  ShieldCheck,
+  TreeDeciduous,
+  Users,
+  X,
 } from 'lucide-react';
-import { ApiError, api, Family, FamilyStats } from '../../lib/api';
-import { ConfirmDialog } from '../../components/confirm-dialog';
+import {
+  ApiError,
+  ConnectHouseholdOut,
+  Family,
+  FamilyStats,
+  Person,
+  api,
+} from '../../lib/api';
+import { useFocusTrap } from '../../lib/use-focus-trap';
 
-type Member = { user_id: string; display_name: string; role: string };
-type Invitation = { id: string; email: string; role: 'member' | 'editor'; expires_at: string; created_at: string; status: 'pending' };
+type ConnectRelation = 'child_of' | 'spouse_of' | 'same_person' | 'parent_of';
 
-function roleLabel(role: string) {
-  if (role === 'owner') return 'Эзэмшигч';
-  if (role === 'editor') return 'Засварлагч';
-  return 'Гишүүн';
-}
+const ADMIN_ROLES = new Set(['owner', 'admin', 'editor']);
 
-function RoleBadge({ role }: { role: string }) {
-  if (role === 'owner') {
-    return (
-      <span className="admin-badge-owner">
-        <Sparkles size={12} />
-        <span>Эзэмшигч (Админ)</span>
-      </span>
-    );
-  }
-  if (role === 'editor') {
-    return (
-      <span className="admin-badge-editor">
-        <ShieldCheck size={12} />
-        <span>Засварлагч</span>
-      </span>
-    );
-  }
-  return (
-    <span className="admin-badge-member">
-      <UserRound size={12} />
-      <span>Гишүүн</span>
-    </span>
-  );
-}
-
-function friendlyError(
-  cause: unknown,
-  fallback: string,
-  conflictMessage = 'Энэ үйлдэл зөрчилтэй байна. Дахин оролдоно уу.',
-) {
+function friendlyError(cause: unknown, fallback: string) {
   if (cause instanceof ApiError) {
-    if (cause.status === 401) return 'Нэвтрэх шаардлагатай. Дахин нэвтэрнэ үү.';
+    if (cause.status === 401) return 'Нэвтрэх шаардлагатай.';
     if (cause.status === 403) return 'Энэ үйлдлийг хийх эрхгүй байна.';
-    if (cause.status === 404) return 'Гэр бүл олдсонгүй эсвэл танд хандах эрхгүй байна.';
-    if (cause.status === 409) return conflictMessage;
-    if (cause.status === 422) return 'Оруулсан мэдээллээ шалгаад дахин оролдоно уу.';
-    if (cause.status === 429) return 'Хэт олон оролдлого байна. Түр хүлээгээд дахин оролдоно уу.';
+    if (cause.status === 404) return 'Мэдээлэл олдсонгүй.';
+    if (cause.status === 409) return 'Ургийн холбоос тойрог эсвэл зөрчил үүсгэж байна.';
     if (cause.status >= 500) return 'Серверийн алдаа гарлаа. Түр хүлээгээд дахин оролдоно уу.';
   }
   return fallback;
 }
 
-function FamiliesContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const explicitFamilyId = searchParams.get('family')?.trim() ?? '';
-  const [families, setFamilies] = useState<Family[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [stats, setStats] = useState<FamilyStats | null>(null);
-  const [selectedFamilyId, setSelectedFamilyId] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [detailError, setDetailError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'member' | 'editor'>('member');
-  const [mutation, setMutation] = useState<'edit' | 'archive' | 'invite' | 'revoke' | ''>('');
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const sequence = useRef(0);
-  const detailSequence = useRef(0);
-  const selectedFamilyRef = useRef('');
+function roleLabel(role: string, adminTitle?: string | null) {
+  if (role === 'owner') return '👑 Ерөнхий админ';
+  if (role === 'admin') return adminTitle ? `🛡️ ${adminTitle}` : '🛡️ Туслах админ';
+  if (role === 'editor') return '✏️ Засварлагч';
+  return '👤 Гишүүн';
+}
 
-  const selectedFamily = useMemo(
-    () => families.find((family) => family.id === selectedFamilyId) ?? null,
-    [families, selectedFamilyId],
-  );
+function FamiliesContent() {
+  const [families, setFamilies] = useState<Family[]>([]);
+  const [statsByFamily, setStatsByFamily] = useState<Record<string, FamilyStats>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [connectedTargetId, setConnectedTargetId] = useState<string | null>(null);
+
+  // Connect Household Modal state
+  const [connectHousehold, setConnectHousehold] = useState<Family | null>(null);
+  const [targetClanId, setTargetClanId] = useState('');
+  const [householdPeople, setHouseholdPeople] = useState<Person[]>([]);
+  const [householdPersonId, setHouseholdPersonId] = useState('');
+  const [targetPeople, setTargetPeople] = useState<Person[]>([]);
+  const [targetAnchorId, setTargetAnchorId] = useState('');
+  const [targetSearch, setTargetSearch] = useState('');
+  const [relation, setRelation] = useState<ConnectRelation>('child_of');
+  const [modalLoading, setModalLoading] = useState(false);
+  const [connectBusy, setConnectBusy] = useState(false);
+  const [modalError, setModalError] = useState('');
+
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(Boolean(connectHousehold), modalRef, {
+    onEscape: () => setConnectHousehold(null),
+  });
 
   const loadFamilies = useCallback(async () => {
-    const current = ++sequence.current;
     setLoading(true);
     setError('');
-    setNotice('');
     try {
-      const data = await api<Family[]>('/families');
-      if (current !== sequence.current) return;
-      setFamilies(data);
-      const validExplicit = explicitFamilyId && data.some((family) => family.id === explicitFamilyId);
-      if (validExplicit) {
-        setSelectedFamilyId(explicitFamilyId);
-      } else if (!explicitFamilyId && data[0]) {
-        setSelectedFamilyId(data[0].id);
-        router.replace('/families?family=' + encodeURIComponent(data[0].id));
-      } else {
-        setSelectedFamilyId('');
+      const list = await api<Family[]>('/families');
+      setFamilies(list);
+      const statPairs = await Promise.all(
+        list.map(async (f) => {
+          const st = await api<FamilyStats>(`/families/${f.id}/stats`).catch(() => null);
+          return [f.id, st] as const;
+        }),
+      );
+      const nextStats: Record<string, FamilyStats> = {};
+      for (const [id, st] of statPairs) {
+        if (st) nextStats[id] = st;
       }
+      setStatsByFamily(nextStats);
     } catch (cause) {
-      if (current !== sequence.current) return;
-      if (cause instanceof ApiError && cause.status === 401) {
-        router.replace('/login');
-        return;
-      }
-      setError(friendlyError(cause, 'Гэр бүлүүдийг ачаалж чадсангүй.'));
+      setError(friendlyError(cause, 'Гэр бүлийн жагсаалтыг ачаалж чадсангүй.'));
     } finally {
-      if (current === sequence.current) setLoading(false);
-    }
-  }, [explicitFamilyId, router]);
-
-  const loadDetails = useCallback(async (familyId: string) => {
-    const current = ++detailSequence.current;
-    setDetailLoading(true);
-    setDetailError('');
-    setMembers([]);
-    setInvitations([]);
-    setStats(null);
-    try {
-      const [memberData, invitationData, statsData] = await Promise.all([
-        api<Member[]>(`/families/${familyId}/members`),
-        api<Invitation[]>(`/families/${familyId}/invitations`),
-        api<FamilyStats>(`/families/${familyId}/stats`).catch(() => null),
-      ]);
-      if (current !== detailSequence.current || selectedFamilyRef.current !== familyId) return;
-      setMembers(memberData);
-      setInvitations(invitationData);
-      setStats(statsData);
-    } catch (cause) {
-      if (current === detailSequence.current && selectedFamilyRef.current === familyId) {
-        setDetailError(friendlyError(cause, 'Гишүүд болон урилгуудыг ачаалж чадсангүй.'));
-      }
-    } finally {
-      if (current === detailSequence.current && selectedFamilyRef.current === familyId) setDetailLoading(false);
+      setLoading(false);
     }
   }, []);
 
-  const updateMemberRole = async (targetUserId: string, nextRole: string) => {
-    if (!selectedFamilyId) return;
-    setMutation('edit');
-    setError('');
-    setNotice('');
-    try {
-      const updated = await api<Member>(`/families/${selectedFamilyId}/members/${targetUserId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ role: nextRole }),
-      });
-      setMembers((prev) => prev.map((m) => (m.user_id === targetUserId ? { ...m, role: updated.role } : m)));
-      setNotice('Гишүүний үүрэг, эрх амжилттай шинэчлэгдлээ.');
-    } catch (cause) {
-      setDetailError(friendlyError(cause, 'Гишүүний үүргийг өөрчилж чадсангүй.'));
-    } finally {
-      setMutation('');
-    }
-  };
-
-  const [confirmState, setConfirmState] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    confirmLabel: string;
-    variant: 'danger' | 'warning' | 'primary';
-    onConfirm: () => void;
-  }>({
-    isOpen: false,
-    title: '',
-    message: '',
-    confirmLabel: 'Батлах',
-    variant: 'danger',
-    onConfirm: () => {},
-  });
-
-  const removeMember = (targetUserId: string, memberName: string) => {
-    if (!selectedFamilyId || mutation) return;
-    setConfirmState({
-      isOpen: true,
-      title: 'Гишүүнийг гэр бүлээс хасах',
-      message: `Та “${memberName}” хэрэглэгчийг энэ гэр бүлээс хасахдаа итгэлтэй байна уу?`,
-      confirmLabel: 'Хасах',
-      variant: 'danger',
-      onConfirm: async () => {
-        setConfirmState((prev) => ({ ...prev, isOpen: false }));
-        setMutation('edit');
-        setError('');
-        setNotice('');
-        try {
-          await api<void>(`/families/${selectedFamilyId}/members/${targetUserId}`, {
-            method: 'DELETE',
-          });
-          setMembers((prev) => prev.filter((m) => m.user_id !== targetUserId));
-          setNotice(`"${memberName}" хэрэглэгчийг гэр бүлээс хаслаа.`);
-        } catch (cause) {
-          setDetailError(friendlyError(cause, 'Гишүүнийг хасаж чадсангүй.'));
-        } finally {
-          setMutation('');
-        }
-      },
-    });
-  };
-
   useEffect(() => {
     void loadFamilies();
-    return () => {
-      sequence.current += 1;
-    };
   }, [loadFamilies]);
 
-  useEffect(() => {
-    selectedFamilyRef.current = selectedFamilyId;
-  }, [selectedFamilyId]);
+  const { mainClans, households, linkedCounts, defaultAdminFamily } = useMemo(() => {
+    const parentIds = new Set(
+      families.map((f) => f.parent_family_id).filter((id): id is string => Boolean(id)),
+    );
+    const primary =
+      families.find((f) => !f.parent_family_id && f.name.toLowerCase().includes('гуулин')) ??
+      families.find((f) => !f.parent_family_id) ??
+      families[0] ??
+      null;
 
-  useEffect(() => {
-    if (!selectedFamily) {
-      setMembers([]);
-      setInvitations([]);
-      setEditing(false);
-      return;
-    }
-    setName(selectedFamily.name);
-    setDescription(selectedFamily.description ?? '');
-    setEditing(false);
-    setInviteOpen(false);
-    void loadDetails(selectedFamily.id);
-  }, [selectedFamily, loadDetails]);
+    const mains = primary
+      ? families.filter(
+          (f) => f.id === primary.id || (!f.parent_family_id && parentIds.has(f.id)),
+        )
+      : [];
+    const mainIds = new Set(mains.map((m) => m.id));
+    const branches = families.filter((f) => !mainIds.has(f.id));
 
-  function selectFamily(id: string) {
-    if (!families.some((f) => f.id === id) || mutation) return;
-    setSelectedFamilyId(id);
-    router.replace('/families?family=' + encodeURIComponent(id));
-    setNotice('');
-  }
-
-  async function saveFamily(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedFamily || mutation) return;
-    const nextName = name.trim();
-    if (!nextName) {
-      setDetailError('Гэр бүлийн нэр хоосон байж болохгүй.');
-      return;
-    }
-    setMutation('edit');
-    setDetailError('');
-    setNotice('');
-    try {
-      const updated = await api<Family>(`/families/${selectedFamily.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ name: nextName, description: description.trim() || null }),
-      });
-      if (selectedFamilyRef.current !== selectedFamily.id) return;
-      setFamilies((current) => current.map((f) => (f.id === updated.id ? updated : f)));
-      setEditing(false);
-      setNotice('Гэр бүлийн мэдээлэл хадгалагдлаа.');
-    } catch (cause) {
-      setDetailError(friendlyError(cause, 'Гэр бүлийн мэдээллийг хадгалж чадсангүй.'));
-    } finally {
-      setMutation('');
-    }
-  }
-
-  function archiveFamily() {
-    if (!selectedFamily || selectedFamily.role !== 'owner' || mutation) return;
-    const archivedId = selectedFamily.id;
-    const archivedName = selectedFamily.name;
-    setConfirmState({
-      isOpen: true,
-      title: 'Гэр бүлийг архивлах',
-      message: `“${archivedName}” гэр бүлийг архивлах уу? Энэ үйлдэл тухайн гэр бүлийг идэвхтэй жагсаалтаас гаргана.`,
-      confirmLabel: 'Архивлах',
-      variant: 'danger',
-      onConfirm: async () => {
-        setConfirmState((prev) => ({ ...prev, isOpen: false }));
-        setMutation('archive');
-        setDetailError('');
-        setNotice('');
-        try {
-          await api<void>(`/families/${archivedId}`, { method: 'DELETE' });
-          if (selectedFamilyRef.current !== archivedId) return;
-          const remaining = families.filter((f) => f.id !== archivedId);
-          setFamilies(remaining);
-          if (remaining.length) {
-            const next = remaining[0].id;
-            setSelectedFamilyId(next);
-            router.replace('/families?family=' + encodeURIComponent(next));
-            setNotice('Гэр бүл архивлагдлаа.');
-          } else {
-            setSelectedFamilyId('');
-            router.replace('/families');
-            setNotice('Гэр бүл архивлагдлаа. Танд одоогоор идэвхтэй гэр бүл алга.');
-          }
-        } catch (cause) {
-          setDetailError(friendlyError(cause, 'Гэр бүлийг архивлаж чадсангүй.'));
-        } finally {
-          setMutation('');
-        }
-      },
-    });
-  }
-
-  async function invite(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedFamily || selectedFamily.role !== 'owner' || mutation) return;
-    const email = inviteEmail.trim();
-    if (!email) return;
-    setMutation('invite');
-    setDetailError('');
-    setNotice('');
-    const familyId = selectedFamily.id;
-    try {
-      await api(`/families/${familyId}/invitations`, {
-        method: 'POST',
-        body: JSON.stringify({ email, role: inviteRole }),
-      });
-      if (selectedFamilyRef.current !== familyId) return;
-      setInviteEmail('');
-      setInviteOpen(false);
-      setNotice(`${email} хаяг руу урилга амжилттай илгээгдлээ.`);
-      await loadDetails(familyId);
-    } catch (cause) {
-      if (selectedFamilyRef.current === familyId) {
-        setDetailError(
-          friendlyError(
-            cause,
-            'Урилга илгээж чадсангүй.',
-            'Энэ имэйл хаягт идэвхтэй урилга байгаа эсвэл аль хэдийн гишүүн байна.',
-          ),
-        );
+    const counts: Record<string, number> = {};
+    for (const f of families) {
+      if (f.parent_family_id) {
+        counts[f.parent_family_id] = (counts[f.parent_family_id] ?? 0) + 1;
       }
-    } finally {
-      setMutation('');
     }
-  }
 
-  function revokeInvitation(invitationId: string, email: string) {
-    if (!selectedFamily || selectedFamily.role !== 'owner' || mutation) return;
-    const familyId = selectedFamily.id;
-    setConfirmState({
-      isOpen: true,
-      title: 'Урилга цуцлах',
-      message: `“${email}” хаяг руу илгээсэн урилгыг цуцлах уу?`,
-      confirmLabel: 'Урилга цуцлах',
-      variant: 'warning',
-      onConfirm: async () => {
-        setConfirmState((prev) => ({ ...prev, isOpen: false }));
-        setMutation('revoke');
-        setDetailError('');
-        setNotice('');
-        try {
-          await api<void>(`/families/${familyId}/invitations/${invitationId}`, { method: 'DELETE' });
-          if (selectedFamilyRef.current !== familyId) return;
-          setNotice('Урилгыг цуцаллаа.');
-          await loadDetails(familyId);
-        } catch (cause) {
-          if (selectedFamilyRef.current === familyId) {
-            setDetailError(friendlyError(cause, 'Урилгыг цуцалж чадсангүй.'));
-          }
-        } finally {
-          setMutation('');
-        }
-      },
-    });
-  }
+    const adminFam = families.find((f) => ADMIN_ROLES.has(f.role)) ?? null;
+    return {
+      mainClans: mains,
+      households: branches,
+      linkedCounts: counts,
+      defaultAdminFamily: adminFam,
+    };
+  }, [families]);
 
-  const isOwner = selectedFamily?.role === 'owner';
-  const isEditor = selectedFamily?.role === 'editor';
-  const isAdmin = isOwner || isEditor;
+  const openConnectModal = useCallback(
+    async (household: Family) => {
+      const candidates = families.filter((f) => f.id !== household.id);
+      const preferredTarget =
+        (household.parent_family_id &&
+          candidates.find((c) => c.id === household.parent_family_id)) ??
+        candidates.find((c) => !c.parent_family_id && c.name.toLowerCase().includes('гуулин')) ??
+        candidates.find((c) => !c.parent_family_id) ??
+        candidates[0] ??
+        null;
+
+      if (!preferredTarget) {
+        setError('Холбох боломжтой өөр ургийн мод олдсонгүй.');
+        return;
+      }
+
+      setConnectHousehold(household);
+      setTargetClanId(preferredTarget.id);
+      setTargetSearch('');
+      setRelation('child_of');
+      setModalError('');
+      setModalLoading(true);
+      try {
+        const [hhPeople, clanPeople] = await Promise.all([
+          api<Person[]>(`/families/${household.id}/persons`),
+          api<Person[]>(`/families/${preferredTarget.id}/persons`),
+        ]);
+        setHouseholdPeople(hhPeople);
+        setHouseholdPersonId(hhPeople[0]?.id ?? '');
+        setTargetPeople(clanPeople);
+        setTargetAnchorId(clanPeople[0]?.id ?? '');
+      } catch (cause) {
+        setModalError(friendlyError(cause, 'Модны хүмүүсийг ачаалж чадсангүй.'));
+      } finally {
+        setModalLoading(false);
+      }
+    },
+    [families],
+  );
+
+  const handleTargetClanChange = async (nextClanId: string) => {
+    setTargetClanId(nextClanId);
+    setModalError('');
+    setModalLoading(true);
+    try {
+      const clanPeople = await api<Person[]>(`/families/${nextClanId}/persons`);
+      setTargetPeople(clanPeople);
+      setTargetAnchorId(clanPeople[0]?.id ?? '');
+    } catch (cause) {
+      setModalError(friendlyError(cause, 'Сонгосон модны хүмүүсийг ачаалж чадсангүй.'));
+      setTargetPeople([]);
+      setTargetAnchorId('');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const filteredTargetPeople = useMemo(() => {
+    const q = targetSearch.trim().toLowerCase();
+    if (!q) return targetPeople;
+    return targetPeople.filter(
+      (p) =>
+        p.first_name.toLowerCase().includes(q) ||
+        p.last_name.toLowerCase().includes(q) ||
+        (p.birth_date && p.birth_date.includes(q)),
+    );
+  }, [targetPeople, targetSearch]);
+
+  const handleConnectSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!connectHousehold || !targetClanId || !householdPersonId || !targetAnchorId || connectBusy) {
+      return;
+    }
+    setConnectBusy(true);
+    setModalError('');
+    try {
+      const res = await api<ConnectHouseholdOut>(
+        `/families/${connectHousehold.id}/connect-to-clan`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            target_family_id: targetClanId,
+            household_person_id: householdPersonId,
+            target_anchor_person_id: targetAnchorId,
+            relation,
+          }),
+        },
+      );
+      setConnectHousehold(null);
+      setConnectedTargetId(res.target_family_id);
+      setNotice(`🔗 ${res.summary}`);
+      await loadFamilies();
+    } catch (cause) {
+      setModalError(friendlyError(cause, 'Их ургийн модтой холбох үед алдаа гарлаа.'));
+    } finally {
+      setConnectBusy(false);
+    }
+  };
 
   return (
-    <div className="families-page" aria-busy={loading}>
+    <div className="families-page clan-hub-page" aria-busy={loading}>
       <div className="families-shell">
-        {/* Page Header */}
-        <div className="families-header">
+        <header className="families-header">
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <ShieldCheck size={20} style={{ color: 'var(--gold, #d9b85d)' }} />
-              <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.12em', color: 'var(--gold, #d9b85d)' }}>
-                ГЭР БҮЛИЙН УДИРДЛАГЫН ТАНХИМ & АДМИН ПОРТАЛ
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <TreeDeciduous size={18} style={{ color: 'var(--ui-accent)' }} />
+              <span
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  letterSpacing: '0.1em',
+                  color: 'var(--ui-accent-text)',
+                }}
+              >
+                ГУУЛИНГИЙНХАН · НЭГДСЭН УРГИЙН САН
               </span>
             </div>
-            <h1>Гэр бүлийн тохиргоо ба эрхийн удирдлага</h1>
+            <h1>🌳 Ураг ба Миний өрх гэр бүл</h1>
             <p>
-              Гэр бүлийн гишүүдийн үүрэг, эрх (Админ, Засварлагч, Гишүүн), шинэ урилга, мэдээллийн аюулгүй байдлыг
-              нэгдсэн эх сурвалжаас удирдана.
+              Бүх гишүүд <strong>Гуулингийнхан</strong> ганц их ургийн модонд харьяалагдах ба та өөрийн гэр бүл (өрх)-ээ тусад нь үүсгэн их модтойгоо шууд холбох боломжтой.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            {selectedFamily && (
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {defaultAdminFamily && (
               <Link
-                href={`/dashboard?family=${encodeURIComponent(selectedFamily.id)}`}
+                href={`/admin?family=${encodeURIComponent(defaultAdminFamily.id)}`}
                 className="homev2-button homev2-button--light"
-                style={{ fontSize: '13px', padding: '8px 16px' }}
               >
-                ← Аппын нүүр
+                <ShieldCheck size={15} /> 👑 Админы удирдлагын төв
               </Link>
             )}
-            <Link
-              href="/onboarding"
-              className="homev2-button homev2-button--primary"
-              style={{ fontSize: '13px', padding: '8px 18px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              + Шинэ гэр бүл үүсгэх
+            <Link href="/onboarding" className="homev2-button homev2-button--primary">
+              <Plus size={15} /> 🏡 Өөрийн өрх үүсгэх
             </Link>
           </div>
-        </div>
+        </header>
 
-        {/* Global Notices */}
         {notice && (
           <div
+            className="ui-callout ui-callout--success"
+            role="status"
             style={{
-              padding: '12px 18px',
-              borderRadius: '12px',
-              background: 'var(--ui-success-bg)',
-              border: '1px solid var(--ui-success-border)',
-              color: 'var(--ui-success-text)',
-              fontSize: '13px',
-              fontWeight: 600,
               display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
-              gap: '8px',
-              marginBottom: '20px',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginBottom: 20,
             }}
           >
-            <CheckCircle2 size={18} />
-            <span>{notice}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CheckCircle2 size={18} />
+              <strong>{notice}</strong>
+            </div>
+            {connectedTargetId && (
+              <Link
+                href={`/tree?family=${encodeURIComponent(connectedTargetId)}`}
+                className="homev2-button homev2-button--primary"
+                style={{ minHeight: 34, padding: '0 12px', fontSize: 12 }}
+              >
+                🌳 Их ургийн модонд харах →
+              </Link>
+            )}
           </div>
         )}
 
         {error && (
           <div
+            className="ui-callout ui-callout--danger"
+            role="alert"
             style={{
-              padding: '12px 18px',
-              borderRadius: '12px',
-              background: 'var(--ui-danger-bg)',
-              border: '1px solid var(--ui-danger-border)',
-              color: 'var(--ui-danger-text)',
-              fontSize: '13px',
               display: 'flex',
-              alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: '20px',
+              alignItems: 'center',
+              gap: 12,
+              marginBottom: 20,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertCircle size={18} />
               <span>{error}</span>
             </div>
@@ -473,7 +321,7 @@ function FamiliesContent() {
               type="button"
               onClick={() => void loadFamilies()}
               className="homev2-button homev2-button--light"
-              style={{ fontSize: '11px', padding: '4px 10px' }}
+              style={{ minHeight: 32, padding: '0 10px', fontSize: 12 }}
             >
               Дахин оролдох
             </button>
@@ -481,460 +329,354 @@ function FamiliesContent() {
         )}
 
         {loading ? (
-          <div style={{ padding: '64px', textAlign: 'center', color: 'var(--ink-secondary, #485c53)' }}>
-            Гэр бүлийн өгөгдлийг ачаалж байна…
+          <div className="families-main-card" style={{ textAlign: 'center', padding: 56 }}>
+            🌳 Ургийн сан ба өрхийн мэдээллийг ачаалж байна…
           </div>
         ) : families.length === 0 ? (
           <div className="families-main-card" style={{ textAlign: 'center', padding: '48px 24px' }}>
-            <TreeDeciduous size={48} style={{ color: 'var(--gold, #d9b85d)', margin: '0 auto 16px' }} />
-            <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '8px' }}>Ургийн модоо эхлүүлээрэй</h2>
-            <p style={{ color: 'var(--ink-secondary, #485c53)', fontSize: '14px', marginBottom: '24px' }}>
-              Танд одоогоор идэвхтэй гэр бүлийн бүртгэл алга байна.
+            <TreeDeciduous size={48} style={{ color: 'var(--ui-accent)', margin: '0 auto 16px' }} />
+            <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>🏡 Өөрийн гэр бүлээ эхлүүлээрэй</h2>
+            <p style={{ color: 'var(--ui-text-secondary)', fontSize: 14, marginBottom: 24 }}>
+              Танд одоогоор идэвхтэй гэр бүлийн бүртгэл алга. Өөрийн өрхөө бүртгээд удмын модоо эхлүүлнэ үү.
             </p>
             <Link href="/onboarding" className="homev2-button homev2-button--primary">
-              Шинэ гэр бүл үүсгэх
+              🏡 Өөрийн өрх үүсгэх
             </Link>
           </div>
         ) : (
-          <div className="families-grid">
-            {/* Sidebar: Family Selector */}
-            <aside className="families-sidebar-card" aria-label="Гэр бүл сонгох">
-              <div className="families-sidebar-title">Таны харьяалагдах гэр бүлүүд</div>
-              <div className="families-list">
-                {families.map((f) => {
-                  const isActive = selectedFamilyId === f.id;
+          <div style={{ display: 'grid', gap: 26 }}>
+            {/* Section 1: Main Ancestral Clan Tree */}
+            <section aria-label="Үндсэн их ургийн мод">
+              <div className="clan-section-title-row">
+                <h2>🌳 Үндсэн Их Ургийн Мод ({mainClans.length})</h2>
+                <span>Нэгдсэн Гуулин өвгийн үр удмын үндсэн сан</span>
+              </div>
+              <div className="clan-cards-grid">
+                {mainClans.map((clan) => {
+                  const st = statsByFamily[clan.id];
+                  const linkedCount = linkedCounts[clan.id] ?? 0;
                   return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      aria-pressed={isActive}
-                      disabled={Boolean(mutation)}
-                      onClick={() => selectFamily(f.id)}
-                      className={`family-nav-item ${isActive ? 'is-active' : ''}`}
-                    >
-                      <div>
-                        <strong>{f.name}</strong>
-                        <small style={{ fontSize: '11px', opacity: 0.8 }}>
-                          {roleLabel(f.role)}
-                        </small>
+                    <article key={clan.id} className="families-main-card clan-card is-primary">
+                      <div className="clan-card-head">
+                        <div className="clan-card-badges">
+                          <span className="clan-pill-accent">👑 Их ургийн мод</span>
+                          <span className="clan-pill-neutral">{roleLabel(clan.role, clan.admin_title)}</span>
+                          {linkedCount > 0 && (
+                            <span className="clan-pill-success">🔗 {linkedCount} өрх холбогдсон</span>
+                          )}
+                        </div>
+                        <h3>{clan.name}</h3>
+                        <p>
+                          {clan.description ||
+                            'Гуулин өвгөөс улбаатай нийт үр удмын нэгдсэн ургийн мод, өв сан, түүхийн орон зай.'}
+                        </p>
                       </div>
-                      <ArrowRight size={14} style={{ opacity: isActive ? 1 : 0.4 }} />
-                    </button>
+
+                      {st && (
+                        <div className="clan-card-metrics">
+                          <div>
+                            <small>Нийт хүн</small>
+                            <strong>{st.total_persons}</strong>
+                          </div>
+                          <div>
+                            <small>Үеийн гүн</small>
+                            <strong>{st.generation_depth} үе</strong>
+                          </div>
+                          <div>
+                            <small>Гэрлэлт</small>
+                            <strong>{st.marriage_count}</strong>
+                          </div>
+                          <div>
+                            <small>Гишүүд</small>
+                            <strong>{st.member_count}</strong>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="clan-card-actions">
+                        <Link
+                          href={`/tree?family=${encodeURIComponent(clan.id)}`}
+                          className="homev2-button homev2-button--primary"
+                          style={{ minHeight: 38, fontSize: 12.5 }}
+                        >
+                          <GitFork size={14} /> Их мод үзэх
+                        </Link>
+                        <Link
+                          href={`/people?family=${encodeURIComponent(clan.id)}`}
+                          className="homev2-button homev2-button--light"
+                          style={{ minHeight: 38, fontSize: 12.5 }}
+                        >
+                          <Users size={14} /> Хүмүүс
+                        </Link>
+                        <Link
+                          href={`/dashboard?family=${encodeURIComponent(clan.id)}`}
+                          className="homev2-button homev2-button--light"
+                          style={{ minHeight: 38, fontSize: 12.5 }}
+                        >
+                          Нүүр <ArrowRight size={13} />
+                        </Link>
+                      </div>
+                    </article>
                   );
                 })}
               </div>
-            </aside>
+            </section>
 
-            {/* Main Admin Section */}
-            {selectedFamily && (
-              <div className="families-main-card">
-                {/* Admin Role Status Notice */}
-                <div className="admin-info-banner">
-                  <Shield size={20} style={{ color: '#d97706', flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <strong>Админ ба Эрхийн хамгаалалт:</strong>{' '}
-                    {isOwner ? (
-                      <span>
-                        Та энэ гэр бүлийн <strong>Эзэмшигч (Админ)</strong> тул гишүүдийн эрхийг өөрчлөх, шинэ урилга
-                        илгээх, мэдээллийн аюулгүй байдлыг хангах бүрэн эрхтэй. Дурын гишүүн бусдын мэдээллийг дур
-                        мэдэн устгах, өөрчлөхөөс 100% сэргийлэгдсэн.
-                      </span>
-                    ) : isEditor ? (
-                      <span>
-                        Та энэ гэр бүлийн <strong>Засварлагч (Editor)</strong> тул ургийн мод болон хүмүүсийн
-                        мэдээллийг баяжуулах эрхтэй.
-                      </span>
-                    ) : (
-                      <span>
-                        Та энэ гэр бүлийн <strong>Гишүүн (Member)</strong> тул өөрийн бүртгэлийг удирдах, өөрийн оруулсан
-                        хүмүүсийг засах болон гэр бүлийн түүхтэй танилцах эрхтэй.
-                      </span>
-                    )}
-                  </div>
-                </div>
+            {/* Section 2: Personal Households / Branches */}
+            <section aria-label="Миний өрх ба гэр бүлүүд">
+              <div className="clan-section-title-row">
+                <h2>🏡 Миний өрх / Гэр бүлийн салбар ({households.length})</h2>
+                <span>Өөрийн өрхөө үүсгээд их ургийн модтой шууд холбоно</span>
+              </div>
 
-                {/* Family Identity Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px', flexWrap: 'wrap' }}>
+              {households.length === 0 ? (
+                <div className="families-main-card clan-empty-household">
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                      <RoleBadge role={selectedFamily.role} />
-                      <span style={{ fontSize: '12px', color: 'var(--ink-muted, #74857b)' }}>
-                        ID: {selectedFamily.id.slice(0, 8)}…
-                      </span>
-                    </div>
-                    <h2 style={{ font: '700 24px Georgia, serif', margin: '0 0 6px', color: 'var(--ink-primary, #17372b)' }}>
-                      {selectedFamily.name}
-                    </h2>
-                    <p style={{ color: 'var(--ink-secondary, #485c53)', fontSize: '14px', margin: 0 }}>
-                      {selectedFamily.description || 'Энэ гэр бүлийн удмын бичиг, дурсамж, түүхийн хувийн орон зай.'}
+                    <strong style={{ fontSize: 15, display: 'block', marginBottom: 4 }}>
+                      🏡 Өөрийн гэр бүл (өрх)-ийг тусад нь үүсгэж холбоорой
+                    </strong>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--ui-text-secondary)' }}>
+                      Та зөвхөн өөрийн хань ижил, үр хүүхэд, эцэг эх бүхий гэр бүлээ тусад нь үүсгэж, дараа нь Гуулингийнхан их модтой холбож болно.
                     </p>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <Link
-                      href={`/tree?family=${encodeURIComponent(selectedFamily.id)}`}
-                      className="homev2-button homev2-button--light"
-                      style={{ fontSize: '12px', padding: '6px 14px' }}
-                    >
-                      Ургийн мод →
-                    </Link>
-                    <Link
-                      href={`/people?family=${encodeURIComponent(selectedFamily.id)}`}
-                      className="homev2-button homev2-button--light"
-                      style={{ fontSize: '12px', padding: '6px 14px' }}
-                    >
-                      Хүмүүс ({stats?.total_persons ?? 0}) →
-                    </Link>
-                  </div>
+                  <Link href="/onboarding" className="homev2-button homev2-button--primary">
+                    <Plus size={14} /> Өөрийн өрх үүсгэх
+                  </Link>
                 </div>
-
-                {/* Family Live Stats Strip */}
-                {stats && (
-                  <div className="admin-stats-strip">
-                    <div className="admin-stat-item">
-                      <small>Нийт хүмүүс</small>
-                      <strong>{stats.total_persons}</strong>
-                    </div>
-                    <div className="admin-stat-item">
-                      <small>Үеийн гүн</small>
-                      <strong>{stats.generation_depth} үе</strong>
-                    </div>
-                    <div className="admin-stat-item">
-                      <small>Гэрлэлт</small>
-                      <strong>{stats.marriage_count}</strong>
-                    </div>
-                    <div className="admin-stat-item">
-                      <small>Амьд сэрүүн</small>
-                      <strong style={{ color: '#059669' }}>{stats.living_count}</strong>
-                    </div>
-                    <div className="admin-stat-item">
-                      <small>Түүх ба Дурсамж</small>
-                      <strong style={{ color: '#d97706' }}>{stats.total_stories + stats.total_memories}</strong>
-                    </div>
-                  </div>
-                )}
-
-                {/* Edit Family Info Form */}
-                {editing ? (
-                  <form onSubmit={saveFamily} style={{ marginTop: '20px', padding: '16px', background: 'var(--ui-surface-subtle)', border: '1px solid var(--ui-border)', borderRadius: '12px' }}>
-                    <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: 'var(--ui-text)' }}>Гэр бүлийн нэр, танилцуулга засах</h3>
-                    <div style={{ display: 'grid', gap: '10px', marginBottom: '14px' }}>
-                      <label className="ui-label">
-                        Гэр бүлийн нэр:
-                        <input
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          maxLength={180}
-                          required
-                          disabled={mutation === 'edit'}
-                          className="ui-input"
-                          style={{ marginTop: '4px' }}
-                        />
-                      </label>
-                      <label className="ui-label">
-                        Тайлбар:
-                        <textarea
-                          value={description}
-                          onChange={(e) => setDescription(e.target.value)}
-                          maxLength={10000}
-                          rows={3}
-                          disabled={mutation === 'edit'}
-                          className="ui-textarea"
-                          style={{ marginTop: '4px' }}
-                        />
-                      </label>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button type="submit" className="homev2-button homev2-button--primary" disabled={Boolean(mutation)}>
-                        {mutation === 'edit' ? 'Хадгалж байна…' : 'Хадгалах'}
-                      </button>
-                      <button
-                        type="button"
-                        className="homev2-button homev2-button--light"
-                        disabled={Boolean(mutation)}
-                        onClick={() => {
-                          setName(selectedFamily.name);
-                          setDescription(selectedFamily.description ?? '');
-                          setEditing(false);
-                        }}
-                      >
-                        Болих
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        className="homev2-button homev2-button--light"
-                        style={{ fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                        onClick={() => setEditing(true)}
-                      >
-                        <Edit3 size={14} /> Гэр бүлийн мэдээлэл засах
-                      </button>
-                    )}
-                    {isOwner && (
-                      <button
-                        type="button"
-                        className="admin-remove-btn"
-                        style={{ fontSize: '12px', padding: '6px 14px' }}
-                        onClick={() => void archiveFamily()}
-                        disabled={Boolean(mutation)}
-                      >
-                        Гэр бүлийг архивлах
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                <hr style={{ margin: '28px 0', border: 'none', borderTop: '1px solid var(--parchment-border, #e2d9c8)' }} />
-
-                {/* Section: Members & Role Management */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                  <div>
-                    <h3 style={{ font: '600 18px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-                      Гэр бүлийн гишүүд & Үүрэг хариуцлага ({members.length})
-                    </h3>
-                    <p style={{ fontSize: '12px', color: 'var(--ink-secondary, #485c53)', margin: 0 }}>
-                      Эзэмшигч нь гишүүдийн эрхийг дээшлүүлж/бууруулж өөрчлөх болон шаардлагатай бол хасах эрхтэй.
-                    </p>
-                  </div>
-                  {isOwner && !inviteOpen && (
-                    <button
-                      type="button"
-                      className="homev2-button homev2-button--primary"
-                      style={{ fontSize: '12px', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                      onClick={() => setInviteOpen(true)}
-                    >
-                      <UserPlus size={14} /> + Гишүүн урих
-                    </button>
-                  )}
-                </div>
-
-                {detailError && (
-                  <div
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      background: 'var(--ui-danger-bg)',
-                      border: '1px solid var(--ui-danger-border)',
-                      color: 'var(--ui-danger-text)',
-                      fontSize: '12px',
-                      margin: '14px 0',
-                    }}
-                  >
-                    {detailError}
-                  </div>
-                )}
-
-                {detailLoading ? (
-                  <div style={{ padding: '32px', textAlign: 'center', color: 'var(--ink-muted, #74857b)', fontSize: '13px' }}>
-                    Гишүүд болон урилгуудыг ачаалж байна…
-                  </div>
-                ) : members.length ? (
-                  <div className="admin-members-list">
-                    {members.map((member) => (
-                      <div key={member.user_id} className="admin-member-card">
-                        <div className="admin-member-left">
-                          <div className="admin-member-avatar">
-                            {member.display_name?.slice(0, 1).toUpperCase() || '?'}
-                          </div>
-                          <div>
-                            <strong style={{ display: 'block', fontSize: '14px', color: 'var(--ink-primary, #17372b)' }}>
-                              {member.display_name}
-                            </strong>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                              <RoleBadge role={member.role} />
-                              <span style={{ fontSize: '11px', color: 'var(--ink-muted, #74857b)' }}>
-                                ID: {member.user_id.slice(0, 8)}…
+              ) : (
+                <div className="clan-cards-grid">
+                  {households.map((hh) => {
+                    const st = statsByFamily[hh.id];
+                    const hasOtherTargets = families.length > 1;
+                    const canManagePeople =
+                      hh.role === 'owner' ||
+                      hh.role === 'editor' ||
+                      (hh.permissions ?? []).includes('manage_people');
+                    return (
+                      <article key={hh.id} className="families-main-card clan-card">
+                        <div className="clan-card-head">
+                          <div className="clan-card-badges">
+                            <span className="clan-pill-neutral">{roleLabel(hh.role, hh.admin_title)}</span>
+                            {hh.parent_family_id ? (
+                              <span className="clan-pill-success">
+                                🔗 «{hh.parent_family_name || 'Их мод'}»-той холбогдсон
                               </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="admin-member-right">
-                          {isOwner ? (
-                            <>
-                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--ink-secondary, #485c53)' }}>
-                                Эрх солих:
-                                <select
-                                  value={member.role}
-                                  onChange={(e) => void updateMemberRole(member.user_id, e.target.value)}
-                                  disabled={Boolean(mutation)}
-                                  className="admin-role-select"
-                                  aria-label={`${member.display_name} үүрэг солих`}
-                                >
-                                  <option value="owner">Эзэмшигч (Админ)</option>
-                                  <option value="editor">Засварлагч</option>
-                                  <option value="member">Гишүүн</option>
-                                </select>
-                              </label>
-                              {member.role !== 'owner' && (
-                                <button
-                                  type="button"
-                                  onClick={() => void removeMember(member.user_id, member.display_name)}
-                                  disabled={Boolean(mutation)}
-                                  className="admin-remove-btn"
-                                  title="Энэ гэр бүлээс хасах"
-                                >
-                                  <Trash2 size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-                                  Хасах
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            <RoleBadge role={member.role} />
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ fontSize: '13px', color: 'var(--ink-muted, #74857b)' }}>Гишүүний мэдээлэл одоогоор алга.</p>
-                )}
-
-                {/* Section: Invite Form */}
-                {isOwner && inviteOpen && (
-                  <form
-                    onSubmit={invite}
-                    style={{
-                      marginTop: '20px',
-                      padding: '20px',
-                      borderRadius: '12px',
-                      background: 'rgba(217, 184, 93, 0.1)',
-                      border: '1px solid rgba(217, 184, 93, 0.3)',
-                    }}
-                  >
-                    <h4 style={{ font: '600 16px Georgia, serif', margin: '0 0 4px', color: 'var(--ink-primary, #17372b)' }}>
-                      Шинэ гэр бүлийн гишүүн урих
-                    </h4>
-                    <p style={{ fontSize: '12px', color: 'var(--ink-secondary, #485c53)', margin: '0 0 14px' }}>
-                      Уригдсан хүнд баталгаажуулах холбоос илгээгдэх бөгөөд зөвшөөрснөөр тухайн эрхээр системд орно.
-                    </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '14px' }}>
-                      <label className="ui-label">
-                        Имэйл хаяг:
-                        <input
-                          type="email"
-                          value={inviteEmail}
-                          onChange={(e) => setInviteEmail(e.target.value)}
-                          placeholder="tany-gerbul@example.mn"
-                          required
-                          disabled={Boolean(mutation)}
-                          className="ui-input"
-                          style={{ marginTop: '4px' }}
-                        />
-                      </label>
-                      <label className="ui-label">
-                        Олгох эрхийн үүрэг:
-                        <select
-                          value={inviteRole}
-                          onChange={(e) => setInviteRole(e.target.value as 'member' | 'editor')}
-                          disabled={Boolean(mutation)}
-                          className="admin-role-select"
-                          style={{ width: '100%', marginTop: '4px', height: '38px' }}
-                        >
-                          <option value="member">Гишүүн (Өөрийн мэдээллээ удирдах)</option>
-                          <option value="editor">Засварлагч (Мод ба хүмүүс засах)</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        type="submit"
-                        className="homev2-button homev2-button--primary"
-                        disabled={Boolean(mutation)}
-                        style={{ fontSize: '12px', padding: '8px 16px' }}
-                      >
-                        {mutation === 'invite' ? 'Илгээж байна…' : 'Урилга илгээх'}
-                      </button>
-                      <button
-                        type="button"
-                        className="homev2-button homev2-button--light"
-                        disabled={Boolean(mutation)}
-                        onClick={() => {
-                          setInviteOpen(false);
-                          setInviteEmail('');
-                        }}
-                        style={{ fontSize: '12px' }}
-                      >
-                        Болих
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* Section: Pending Invitations */}
-                <div style={{ marginTop: '28px' }}>
-                  <h4 style={{ font: '600 16px Georgia, serif', margin: '0 0 6px', color: 'var(--ink-primary, #17372b)' }}>
-                    Хүлээгдэж буй урилгууд ({invitations.length})
-                  </h4>
-                  {invitations.length ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
-                      {invitations.map((inv) => (
-                        <div
-                          key={inv.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '10px 14px',
-                            borderRadius: '10px',
-                            background: 'var(--parchment-canvas, #f6f2e8)',
-                            border: '1px solid var(--parchment-border, #e2d9c8)',
-                            flexWrap: 'wrap',
-                            gap: '10px',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <Mail size={16} style={{ color: 'var(--gold, #d9b85d)' }} />
-                            <div>
-                              <strong style={{ fontSize: '13px', color: 'var(--ink-primary, #17372b)' }}>
-                                {inv.email}
-                              </strong>
-                              <div style={{ fontSize: '11px', color: 'var(--ink-muted, #74857b)' }}>
-                                Дуусах хугацаа: {new Date(inv.expires_at).toLocaleDateString('mn-MN')}
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <RoleBadge role={inv.role} />
-                            {isOwner && (
-                              <button
-                                type="button"
-                                disabled={Boolean(mutation)}
-                                onClick={() => void revokeInvitation(inv.id, inv.email)}
-                                className="admin-remove-btn"
-                                style={{ padding: '4px 10px', fontSize: '11px' }}
-                              >
-                                {mutation === 'revoke' ? 'Цуцалж байна…' : 'Цуцлах'}
-                              </button>
+                            ) : (
+                              <span className="clan-pill-warning">🌿 Их модтой холбогдоогүй</span>
                             )}
                           </div>
+                          <h3>🏡 {hh.name}</h3>
+                          <p>
+                            {hh.description ||
+                              'Өөрийн гэр бүлийн гишүүдийн хувийн бүртгэл ба удамшлын салбар.'}
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p style={{ fontSize: '12px', color: 'var(--ink-muted, #74857b)', margin: '6px 0 0' }}>
-                      Одоогоор хүлээгдэж буй идэвхтэй урилга алга байна.
-                    </p>
-                  )}
+
+                        {st && (
+                          <div className="clan-card-metrics">
+                            <div>
+                              <small>Гишүүд (модонд)</small>
+                              <strong>{st.total_persons}</strong>
+                            </div>
+                            <div>
+                              <small>Үе</small>
+                              <strong>{st.generation_depth}</strong>
+                            </div>
+                            <div>
+                              <small>Гэрлэлт</small>
+                              <strong>{st.marriage_count}</strong>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="clan-card-actions">
+                          <Link
+                            href={`/tree?family=${encodeURIComponent(hh.id)}`}
+                            className="homev2-button homev2-button--light"
+                            style={{ minHeight: 38, fontSize: 12.5 }}
+                          >
+                            <GitFork size={14} /> Өрхийн мод
+                          </Link>
+                          <Link
+                            href={`/people?family=${encodeURIComponent(hh.id)}`}
+                            className="homev2-button homev2-button--light"
+                            style={{ minHeight: 38, fontSize: 12.5 }}
+                          >
+                            <Users size={14} /> Хүмүүс
+                          </Link>
+                          {hasOtherTargets && canManagePeople && (
+                            <button
+                              type="button"
+                              onClick={() => void openConnectModal(hh)}
+                              className="homev2-button homev2-button--primary"
+                              style={{ minHeight: 38, fontSize: 12.5 }}
+                            >
+                              <Link2 size={14} />
+                              {hh.parent_family_id ? 'Их модтой нэмж холбох' : 'Их ургийн модтой холбох'}
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
-              </div>
-            )}
+              )}
+            </section>
           </div>
         )}
       </div>
-      <ConfirmDialog
-        isOpen={confirmState.isOpen}
-        title={confirmState.title}
-        message={confirmState.message}
-        confirmLabel={confirmState.confirmLabel}
-        variant={confirmState.variant}
-        busy={Boolean(mutation)}
-        onConfirm={confirmState.onConfirm}
-        onCancel={() => setConfirmState((prev) => ({ ...prev, isOpen: false }))}
-      />
+
+      {/* Connect Household to Master Clan Modal */}
+      {connectHousehold && (
+        <div className="ui-modal-backdrop" role="presentation">
+          <div
+            ref={modalRef}
+            className="ui-modal-card"
+            style={{ maxWidth: 580 }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="connect-clan-modal-title"
+          >
+            <div className="ui-modal-header">
+              <div>
+                <h2 id="connect-clan-modal-title" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+                  🔗 «{connectHousehold.name}» өрхийг их ургийн модтой холбох
+                </h2>
+                <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--ui-text-muted)' }}>
+                  Танай өрхийн гишүүд сонгосон их ургийн модонд нэмэгдэж, удмын хэлхээ залгагдана.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConnectHousehold(null)}
+                className="admin-icon-close"
+                aria-label="Цонх хаах"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConnectSubmit}>
+              <div className="ui-modal-body" style={{ display: 'grid', gap: 14 }}>
+                {modalError && <div className="ui-callout ui-callout--danger">{modalError}</div>}
+
+                <label className="ui-label">
+                  🌳 Холбогдох их ургийн мод *
+                  <select
+                    value={targetClanId}
+                    onChange={(e) => void handleTargetClanChange(e.target.value)}
+                    disabled={connectBusy}
+                    className="ui-select"
+                    style={{ marginTop: 5 }}
+                  >
+                    {families
+                      .filter((f) => f.id !== connectHousehold.id)
+                      .map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+
+                <label className="ui-label">
+                  🏡 Өрхийн талаас залгагдах хүн *
+                  <select
+                    value={householdPersonId}
+                    onChange={(e) => setHouseholdPersonId(e.target.value)}
+                    disabled={connectBusy || modalLoading || householdPeople.length === 0}
+                    className="ui-select"
+                    style={{ marginTop: 5 }}
+                  >
+                    {householdPeople.length === 0 ? (
+                      <option value="">Энэ өрхөд хүн бүртгэгдээгүй байна</option>
+                    ) : (
+                      householdPeople.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {[p.last_name, p.first_name].filter(Boolean).join(' ')}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+
+                <label className="ui-label">
+                  🧬 Их модтой ямар холбоосоор залгах вэ? *
+                  <select
+                    value={relation}
+                    onChange={(e) => setRelation(e.target.value as ConnectRelation)}
+                    disabled={connectBusy}
+                    className="ui-select"
+                    style={{ marginTop: 5 }}
+                  >
+                    <option value="child_of">👶 Сонгосон хүний үр хүүхэд (доороос нь холбоно)</option>
+                    <option value="spouse_of">💍 Сонгосон хүний хань ижил</option>
+                    <option value="same_person">✨ Их модонд байгаа ижил хүнтэй нэгтгэх</option>
+                    <option value="parent_of">🌿 Сонгосон хүний эцэг эх (дээрээс нь холбоно)</option>
+                  </select>
+                </label>
+
+                <label className="ui-label">
+                  🔍 Их модноос хүн хайх
+                  <input
+                    value={targetSearch}
+                    onChange={(e) => setTargetSearch(e.target.value)}
+                    placeholder="Нэр, овгоор шүүх…"
+                    disabled={connectBusy || modalLoading}
+                    className="ui-input"
+                    style={{ marginTop: 5 }}
+                  />
+                </label>
+
+                <label className="ui-label">
+                  🌳 Их модон дахь хүн ({filteredTargetPeople.length}) *
+                  <select
+                    value={targetAnchorId}
+                    onChange={(e) => setTargetAnchorId(e.target.value)}
+                    disabled={connectBusy || modalLoading || filteredTargetPeople.length === 0}
+                    className="ui-select"
+                    style={{ marginTop: 5 }}
+                  >
+                    {modalLoading ? (
+                      <option value="">Хүмүүсийг ачаалж байна…</option>
+                    ) : filteredTargetPeople.length === 0 ? (
+                      <option value="">Хүн олдсонгүй</option>
+                    ) : (
+                      filteredTargetPeople.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {[p.last_name, p.first_name].filter(Boolean).join(' ')}
+                          {p.birth_date ? ` (${p.birth_date.slice(0, 4)})` : ''}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+              </div>
+
+              <div className="ui-modal-footer">
+                <button
+                  type="button"
+                  onClick={() => setConnectHousehold(null)}
+                  disabled={connectBusy}
+                  className="homev2-button homev2-button--light"
+                >
+                  Болих
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    connectBusy || modalLoading || !householdPersonId || !targetAnchorId || !targetClanId
+                  }
+                  className="homev2-button homev2-button--primary"
+                >
+                  <Link2 size={14} />
+                  {connectBusy ? 'Холбож байна…' : '🔗 Их модтой холбох'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -943,8 +685,10 @@ export default function FamiliesPage() {
   return (
     <Suspense
       fallback={
-        <div style={{ padding: '64px', textAlign: 'center', color: 'var(--ui-text-muted)' }}>
-          Гэр бүлүүдийг ачаалж байна…
+        <div className="families-page">
+          <div className="families-shell" style={{ padding: 64, textAlign: 'center' }}>
+            🌳 Ургийн сан ба өрхүүдийг ачаалж байна…
+          </div>
         </div>
       }
     >

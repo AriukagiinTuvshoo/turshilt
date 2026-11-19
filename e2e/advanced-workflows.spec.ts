@@ -31,8 +31,11 @@ test.describe('Guulingiinhan Advanced & Production Workflows', () => {
       `/tree?family=${encodeURIComponent(familyId)}`,
       `/activities?family=${encodeURIComponent(familyId)}`,
       `/chat?family=${encodeURIComponent(familyId)}`,
+      `/families`,
+      `/onboarding`,
       `/admin?family=${encodeURIComponent(familyId)}`,
       `/admin/admins?family=${encodeURIComponent(familyId)}`,
+      `/admin/data?family=${encodeURIComponent(familyId)}`,
     ];
 
     for (const route of routes) {
@@ -327,14 +330,26 @@ test.describe('Guulingiinhan Advanced & Production Workflows', () => {
         (await helperPage.request.post(`${API_BASE}/invitations/accept`, { data: { token } })).status(),
       ).toBe(200);
 
-      // 1. Open Admin Command Cockpit (/admin)
-      await ownerPage.goto(`/admin?family=${encodeURIComponent(familyId)}`);
+      // 1. Open /dashboard -> verify Admin link is NOT in member sidebar, open Profile menu -> launch Standalone Admin Console
+      await ownerPage.goto(`/dashboard?family=${encodeURIComponent(familyId)}`);
+      await expect(ownerPage.locator('nav[aria-label="Үндсэн навигаци"]')).not.toContainText('Админ удирдлага');
+      await ownerPage.locator('.app-shell__account-button').click();
+      const profileAdminLink = ownerPage.getByRole('menuitem', { name: /Админы удирдлагын төв/ });
+      await expect(profileAdminLink).toBeVisible();
+      await profileAdminLink.click();
+      await ownerPage.waitForURL(new RegExp(`/admin\\?family=${familyId}`));
+
+      // Standalone console mounts without member .app-shell wrapper and without verbose permission summary
+      await expect(ownerPage.locator('.admin-console')).toBeVisible();
+      await expect(ownerPage.locator('.app-shell')).toHaveCount(0);
       await expect(ownerPage.getByRole('heading', { name: /Админы Ерөнхий Төв/ })).toBeVisible();
       await expect(ownerPage.locator('body')).toContainText('Өгөгдлийн эрүүл мэнд');
+      await expect(ownerPage.locator('body')).not.toContainText('Танд олгогдсон эрхүүд:');
 
       // 2. Navigate to dedicated Admins & Roles page (/admin/admins)
       await ownerPage.getByRole('link', { name: /Админ ба Эрх/ }).first().click();
       await ownerPage.waitForURL(new RegExp(`/admin/admins\\?family=${familyId}`));
+      await expect(ownerPage.locator('body')).not.toContainText('Эрхийн шатлалын гарын авлага');
 
       // Promote helper via preset & custom title
       await ownerPage.getByRole('button', { name: /Өгөгдөл ба Мод шинэчлэгч/ }).click();
@@ -352,14 +367,56 @@ test.describe('Guulingiinhan Advanced & Production Workflows', () => {
       await expect(dialog).toBeHidden();
       await expect(ownerPage.getByRole('button', { name: /Эрх & Үүрэг засах/ })).toHaveCount(0);
 
-      // 3. Navigate to dedicated Data & Audit page (/admin/data) and run 1-click Data Refresh
+      // 3. Navigate to dedicated Data & Audit page (/admin/data), confirm archive/backup removed, run 1-click Data Refresh
       await ownerPage.getByRole('link', { name: /Өгөгдөл ба Аудит/ }).first().click();
       await ownerPage.waitForURL(new RegExp(`/admin/data\\?family=${familyId}`));
+      await expect(ownerPage.locator('body')).not.toContainText('Гэр бүлийг архивлах');
+      await expect(ownerPage.locator('body')).not.toContainText('GEDCOM');
       await ownerPage.getByRole('button', { name: /Өгөгдөл шинэчлэх/ }).click();
       await expect(ownerPage.locator('body')).toContainText('Сүүлд шинэчилсэн:');
     } finally {
       await ownerCtx.close();
       await helperCtx.close();
     }
+  });
+
+  test('personal household creation via onboarding and live connection to main Guulingiinhan clan', async ({ page }) => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    await registerVerifiedAndLogin(page, {
+      email: `e2e-household-${suffix}@example.com`,
+      password: 'E2E-Strong-Password-2026!',
+      displayName: 'Өрх Бүтээгч',
+    });
+
+    // Seed main clan (Гуулингийнхан) with ancestral root person
+    const clanResp = await page.request.post(`${API_BASE}/families`, {
+      data: { name: `Гуулингийнхан ${suffix}` },
+    });
+    expect(clanResp.status()).toBe(201);
+    const clanId = (await clanResp.json()).id as string;
+
+    const ancestorResp = await page.request.post(`${API_BASE}/families/${clanId}/persons`, {
+      data: { first_name: 'ГуулинӨвөг', last_name: 'Их', gender: 'male', is_alive: false },
+    });
+    expect(ancestorResp.status()).toBe(201);
+
+    // Build personal household on /onboarding with a child and auto-connect onto Гуулингийнхан
+    await page.goto('/onboarding');
+    await expect(page.getByRole('heading', { name: /Өөрийн гэр бүл \(өрх\) үүсгэх/ })).toBeVisible();
+    await page.locator('input[name="family"]').fill(`Батсайханы өрх ${suffix}`);
+    await page.locator('input[name="name"]').fill('Батсайхан');
+    await page.getByRole('button', { name: /Хүүхэд нэмэх/ }).click();
+    await page.getByPlaceholder(/1-р хүүхдийн нэр/).fill('Сүхээ');
+
+    await page.getByRole('button', { name: /Өрхөө үүсгээд их ургийн модтой холбох/ }).click();
+    await page.waitForURL(new RegExp(`/tree\\?family=${clanId}`), { timeout: 20_000 });
+    await expect(page.locator('body')).toContainText('Батсайхан');
+    await expect(page.locator('body')).toContainText('Сүхээ');
+
+    // Verify /families displays unified main clan + linked personal household
+    await page.goto('/families');
+    await expect(page.locator('body')).toContainText(`Гуулингийнхан ${suffix}`);
+    await expect(page.locator('body')).toContainText(`Батсайханы өрх ${suffix}`);
+    await expect(page.locator('body')).toContainText('холбогдсон');
   });
 });

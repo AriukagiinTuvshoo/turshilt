@@ -233,3 +233,172 @@ def test_subadmin_invitation_and_admin_removal_boundaries(client, database):
     _login(client, "root-owner@example.com")
     owner_members = client.get(f"/api/v1/families/{family_id}/members").json()
     assert all(m["email"] is not None for m in owner_members)
+
+
+def test_connect_household_to_main_clan_and_boundaries(client, database):
+    assert register_verified(client, "clan-founder@example.com").status_code == 201
+    clan = client.post("/api/v1/families", json={"name": "Гуулингийнхан"}).json()
+    clan_id = clan["id"]
+
+    founder_ancestor = client.post(
+        f"/api/v1/families/{clan_id}/persons",
+        json={"first_name": "Гуулин", "last_name": "Өвөг", "gender": "male"},
+    ).json()
+    other_clan_person = client.post(
+        f"/api/v1/families/{clan_id}/persons",
+        json={"first_name": "Сүх", "last_name": "Гуулин", "gender": "male"},
+    ).json()
+
+    # Outsider creates a household -> cannot connect to clan without membership (403)
+    client.post("/api/v1/auth/logout")
+    assert register_verified(client, "outsider-hh@example.com").status_code == 201
+    outsider_hh = client.post("/api/v1/families", json={"name": "Гадны Өрх"}).json()
+    outsider_person = client.post(
+        f"/api/v1/families/{outsider_hh['id']}/persons",
+        json={"first_name": "Зочин", "last_name": "Дорж", "gender": "male"},
+    ).json()
+    assert (
+        client.post(
+            f"/api/v1/families/{outsider_hh['id']}/connect-to-clan",
+            json={
+                "target_family_id": clan_id,
+                "household_person_id": outsider_person["id"],
+                "target_anchor_person_id": founder_ancestor["id"],
+                "relation": "child_of",
+            },
+        ).status_code
+        == 403
+    )
+
+    # Descendant member belongs to Гуулингийнхан as regular 'member'
+    client.post("/api/v1/auth/logout")
+    assert register_verified(client, "descendant-hh@example.com").status_code == 201
+    desc_user_id = client.get("/api/v1/auth/me").json()["id"]
+    with database() as db:
+        db.add(FamilyMember(family_id=UUID(clan_id), user_id=UUID(desc_user_id), role="member"))
+        db.commit()
+
+    # Member creates their own personal household and builds their nuclear family
+    hh = client.post("/api/v1/families", json={"name": "Батболдын гэр бүл"}).json()
+    hh_id = hh["id"]
+    hh_self = client.post(
+        f"/api/v1/families/{hh_id}/persons",
+        json={"first_name": "Батболд", "last_name": "Гуулин", "gender": "male"},
+    ).json()
+    hh_spouse = client.post(
+        f"/api/v1/families/{hh_id}/persons",
+        json={"first_name": "Сарантуяа", "last_name": "Дорж", "gender": "female"},
+    ).json()
+    hh_child = client.post(
+        f"/api/v1/families/{hh_id}/persons",
+        json={"first_name": "Тэмүүлэн", "last_name": "Батболд", "gender": "male"},
+    ).json()
+    client.post(f"/api/v1/families/{hh_id}/persons/{hh_self['id']}/link-me")
+    client.post(
+        f"/api/v1/families/{hh_id}/relationships/parent-child",
+        json={"parent_id": hh_self["id"], "child_id": hh_child["id"]},
+    )
+    client.post(
+        f"/api/v1/families/{hh_id}/marriages",
+        json={"person_1_id": hh_self["id"], "person_2_id": hh_spouse["id"], "status": "married"},
+    )
+
+    # Regular member CANNOT use same_person onto an unrelated person in main clan (403)
+    assert (
+        client.post(
+            f"/api/v1/families/{hh_id}/connect-to-clan",
+            json={
+                "target_family_id": clan_id,
+                "household_person_id": hh_self["id"],
+                "target_anchor_person_id": other_clan_person["id"],
+                "relation": "same_person",
+            },
+        ).status_code
+        == 403
+    )
+
+    # Member CAN connect their household child_of Гуулин Өвөг -> all 3 household people join Гуулингийнхан tree
+    conn = client.post(
+        f"/api/v1/families/{hh_id}/connect-to-clan",
+        json={
+            "target_family_id": clan_id,
+            "household_person_id": hh_self["id"],
+            "target_anchor_person_id": founder_ancestor["id"],
+            "relation": "child_of",
+        },
+    )
+    assert conn.status_code == 200
+    conn_body = conn.json()
+    assert conn_body["target_family_id"] == clan_id
+    assert conn_body["target_family_name"] == "Гуулингийнхан"
+    assert conn_body["linked_persons_count"] == 3
+    assert conn_body["bridge_relation"] == "child_of"
+
+    fams = client.get("/api/v1/families").json()
+    hh_info = next(f for f in fams if f["id"] == hh_id)
+    assert hh_info["parent_family_id"] == clan_id
+    assert hh_info["parent_family_name"] == "Гуулингийнхан"
+
+    clan_people = client.get(f"/api/v1/families/{clan_id}/persons").json()
+    clan_names = {p["first_name"] for p in clan_people}
+    assert {"Гуулин", "Батболд", "Сарантуяа", "Тэмүүлэн"}.issubset(clan_names)
+
+    clan_tree = client.get(f"/api/v1/families/{clan_id}/tree?root_person_id={founder_ancestor['id']}&depth=5").json()
+    assert any(
+        edge["parent_id"] == founder_ancestor["id"] and edge["child_id"] == hh_self["id"]
+        for edge in clan_tree["parent_child_relationships"]
+    )
+
+    # Cycle protection: clan owner cannot connect Гуулингийнхан as child under Bатболд's household (409)
+    _login(client, "clan-founder@example.com")
+    with database() as db:
+        founder_id = db.query(User).filter(User.email == "clan-founder@example.com").one().id
+        db.add(FamilyMember(family_id=UUID(hh_id), user_id=founder_id, role="member"))
+        db.commit()
+    assert (
+        client.post(
+            f"/api/v1/families/{clan_id}/connect-to-clan",
+            json={
+                "target_family_id": hh_id,
+                "household_person_id": founder_ancestor["id"],
+                "target_anchor_person_id": hh_self["id"],
+                "relation": "parent_of",
+            },
+        ).status_code
+        == 409
+    )
+
+    # Owner tests same_person bridge: merges duplicate household self into existing clan node cleanly
+    hh2 = client.post("/api/v1/families", json={"name": "Давхардалгүй Өрх"}).json()
+    hh2_self = client.post(
+        f"/api/v1/families/{hh2['id']}/persons",
+        json={"first_name": "Сүх (өрх)", "last_name": "Гуулин", "gender": "male"},
+    ).json()
+    hh2_child = client.post(
+        f"/api/v1/families/{hh2['id']}/persons",
+        json={"first_name": "Баяраа", "last_name": "Сүх", "gender": "male"},
+    ).json()
+    client.post(
+        f"/api/v1/families/{hh2['id']}/relationships/parent-child",
+        json={"parent_id": hh2_self["id"], "child_id": hh2_child["id"]},
+    )
+    same_res = client.post(
+        f"/api/v1/families/{hh2['id']}/connect-to-clan",
+        json={
+            "target_family_id": clan_id,
+            "household_person_id": hh2_self["id"],
+            "target_anchor_person_id": other_clan_person["id"],
+            "relation": "same_person",
+        },
+    )
+    assert same_res.status_code == 200
+    assert same_res.json()["linked_persons_count"] == 1
+    clan_people_after = client.get(f"/api/v1/families/{clan_id}/persons").json()
+    clan_names_after = {p["first_name"] for p in clan_people_after}
+    assert "Баяраа" in clan_names_after
+    assert "Сүх (өрх)" not in clan_names_after
+    clan_edges_after = client.get(f"/api/v1/families/{clan_id}/relationships/parent-child").json()
+    assert any(
+        e["parent_id"] == other_clan_person["id"] and e["child_id"] == hh2_child["id"]
+        for e in clan_edges_after
+    )

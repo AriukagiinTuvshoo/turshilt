@@ -632,10 +632,10 @@ function DashboardContent() {
         <section className="homev2-state">
           <TreeDeciduous size={42} />
           <p className="homev2-eyebrow">ГУУЛИНГИЙНХАН</p>
-          <h1>Гэр бүлийн түүхээ эндээс эхлүүлээрэй.</h1>
-          <p>Одоогоор танд харагдах гэр бүл алга. Эхлээд гэр бүлээ үүсгээд өөрийн хүмүүсээ нэмнэ.</p>
+          <h1>Ургийн түүхээ эндээс эхлүүлээрэй.</h1>
+          <p>Та өөрийн өрх гэр бүлээ бүртгэж, Гуулингийнхан их ургийн модтой шууд холбох боломжтой.</p>
           <Link className="homev2-button homev2-button--dark" href="/onboarding">
-            Гэр бүл үүсгэх
+            🏡 Өөрийн өрх үүсгэх
           </Link>
         </section>
       </main>

@@ -18,6 +18,7 @@ from app.main import app
 CONTRACT_PAIRS: list[tuple[str, str]] = [
     ("UserOutput", "User"),
     ("FamilyOut", "Family"),
+    ("ConnectHouseholdOut", "ConnectHouseholdOut"),
     ("MemberOut", "FamilyMemberItem"),
     ("FamilyAdminOverviewOut", "FamilyAdminOverview"),
     ("AdminDataRefreshOut", "AdminDataRefreshResult"),

@@ -45,8 +45,8 @@ export const PERMISSION_CATALOG: PermissionMeta[] = [
   {
     key: 'manage_data',
     emoji: '💾',
-    label: 'Өгөгдөл шинэчлэл & Нөөцлөлт',
-    description: 'Нэр ба хайлтын индекс шинэчлэх, JSON / GEDCOM татах/оруулах, хогийн савнаас сэргээх болон цэвэрлэх',
+    label: 'Өгөгдөл шинэчлэл & Хогийн сав',
+    description: 'Хүний нэр, хайлтын индексийг цэгцлэн шинэчлэх, хогийн савнаас сэргээх болон цэвэрлэх',
   },
   {
     key: 'view_audit',
@@ -179,6 +179,8 @@ export function formatAuditAction(action: string) {
       return { label: 'Гэрлэлтийн холбоос хассан', icon: '🗑️', color: '#dc2626', bg: 'rgba(220,38,38,0.12)' };
     case 'family.created':
       return { label: 'Гэр бүлийн сан үүсгэсэн', icon: '🏛️', color: '#7c3aed', bg: 'rgba(124,58,237,0.12)' };
+    case 'household.connected_to_clan':
+      return { label: 'Өрх гэр бүлийг их ургийн модтой холбосон', icon: '🏡', color: '#059669', bg: 'rgba(16,185,129,0.14)' };
     case 'family.updated':
       return { label: 'Гэр бүлийн тохиргоо зассан', icon: '⚙️', color: '#4b5563', bg: 'rgba(75,85,99,0.12)' };
     case 'family.data_refreshed':

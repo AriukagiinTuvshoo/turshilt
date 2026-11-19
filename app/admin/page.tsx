@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api, AdminDataRefreshResult } from '../../lib/api';
 import { useAdminContext } from '../../components/admin/admin-shell';
-import { friendlyError, permissionEmojiMeta, RoleBadge } from '../../components/admin/admin-types';
+import { friendlyError, RoleBadge } from '../../components/admin/admin-types';
 
 function computeHealthPercent(opts: {
   totalPersons: number;
@@ -156,9 +156,9 @@ export default function AdminCockpitPage() {
       href: withFamilyHref('/admin/data'),
       emoji: '💾',
       stat: `${overview.trash_count} хогийн сав`,
-      title: 'Өгөгдөл шинэчлэх, Нөөц & Аудит',
+      title: 'Өгөгдөл шинэчлэл, Хогийн сав & Аудит',
       description:
-        '1 дарж дата & хайлтын индекс шинэчлэх, JSON/GEDCOM нөөц, хогийн сав сэргээх, үйлдлийн түүх ба тохиргоо.',
+        '1 дарж дата & хайлтын индекс шинэчлэх, хогийн савнаас сэргээх, үйлдлийн түүх ба ерөнхий тохиргоо.',
       cta: 'Өгөгдөл ба аудит →',
     },
   ];
@@ -172,17 +172,7 @@ export default function AdminCockpitPage() {
             <span className="admin-pill-neutral">🏡 {overview.family_name}</span>
           </div>
           <h2>✨ {overview.family_name} — Админы Ерөнхий Төв</h2>
-          <p>
-            Танд олгогдсон эрхүүд:{' '}
-            {overview.my_permissions.length > 0
-              ? overview.my_permissions
-                  .map((p) => {
-                    const meta = permissionEmojiMeta(p);
-                    return `${meta.emoji} ${meta.label}`;
-                  })
-                  .join(' · ')
-              : 'Үндсэн хяналт'}
-          </p>
+          <p>Ургийн бүртгэл, гишүүд, өв сан болон өгөгдлийн нэгдсэн удирдлагын төв.</p>
         </div>
 
         <div className="admin-health-box">

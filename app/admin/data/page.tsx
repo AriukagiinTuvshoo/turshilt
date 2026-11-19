@@ -1,17 +1,12 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Search, Trash2 } from 'lucide-react';
 import {
   AdminDataRefreshResult,
-  FamilyImportResult,
   FamilyTrashItem,
-  Marriage,
-  ParentChildRelationshipItem,
-  Person,
   api,
 } from '../../../lib/api';
-import { exportToGedcom, parseGedcom } from '../../../lib/gedcom';
 import { ConfirmDialog } from '../../../components/confirm-dialog';
 import { useAdminContext } from '../../../components/admin/admin-shell';
 import {
@@ -24,7 +19,6 @@ export default function AdminDataPage() {
   const {
     selectedFamilyId,
     selectedFamily,
-    isOwner,
     can,
     setNotice,
     setError,
@@ -41,9 +35,6 @@ export default function AdminDataPage() {
   const [familyDescription, setFamilyDescription] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-
-  const jsonInputRef = useRef<HTMLInputElement>(null);
-  const gedcomInputRef = useRef<HTMLInputElement>(null);
 
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
@@ -132,118 +123,6 @@ export default function AdminDataPage() {
     }
   };
 
-  const handleExportJson = async () => {
-    if (!selectedFamilyId || !selectedFamily) return;
-    setBusy(true);
-    try {
-      const data = await api<Record<string, unknown>>(`/families/${selectedFamilyId}/export`);
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `guulin-backup-${selectedFamily.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setNotice('📦 Гэр бүлийн JSON нөөц файл татаж авлаа.');
-    } catch (cause) {
-      setError(friendlyError(cause, 'JSON нөөц татах үед алдаа гарлаа.'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleImportJson = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedFamilyId) return;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      const parsed = JSON.parse(await file.text()) as {
-        people?: unknown[];
-        parent_child_relationships?: unknown[];
-        marriages?: unknown[];
-      };
-      const res = await api<FamilyImportResult>(`/families/${selectedFamilyId}/import`, {
-        method: 'POST',
-        body: JSON.stringify({
-          people: Array.isArray(parsed.people) ? parsed.people : [],
-          parent_child_relationships: Array.isArray(parsed.parent_child_relationships)
-            ? parsed.parent_child_relationships
-            : [],
-          marriages: Array.isArray(parsed.marriages) ? parsed.marriages : [],
-        }),
-      });
-      setNotice(
-        `📦 JSON импорт амжилттай: ${res.imported_people} хүн, ${res.imported_relationships} холбоос, ${res.imported_marriages} гэрлэлт.`,
-      );
-      await Promise.all([loadData(), refreshOverview()]);
-    } catch (cause) {
-      setError(friendlyError(cause, 'JSON файл импортлох үед алдаа гарлаа.'));
-    } finally {
-      setBusy(false);
-      if (jsonInputRef.current) jsonInputRef.current.value = '';
-    }
-  };
-
-  const handleExportGedcom = async () => {
-    if (!selectedFamilyId || !selectedFamily) return;
-    setBusy(true);
-    try {
-      const [people, edges, marriages] = await Promise.all([
-        api<Person[]>(`/families/${selectedFamilyId}/persons`),
-        api<ParentChildRelationshipItem[]>(
-          `/families/${selectedFamilyId}/relationships/parent-child`,
-        ).catch(() => []),
-        api<Marriage[]>(`/families/${selectedFamilyId}/marriages`).catch(() => []),
-      ]);
-      const ged = exportToGedcom(selectedFamily.name, people, edges, marriages);
-      const blob = new Blob([ged], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `guulin-${selectedFamily.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.ged`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setNotice('🧬 GEDCOM 5.5.1 (.ged) файл татаж авлаа.');
-    } catch (cause) {
-      setError(friendlyError(cause, 'GEDCOM файл бэлтгэх үед алдаа гарлаа.'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleImportGedcom = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedFamilyId) return;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      const parsed = parseGedcom(await file.text());
-      if (parsed.people.length === 0) {
-        throw new Error('GEDCOM файл дотор хүний мэдээлэл олдсонгүй.');
-      }
-      const res = await api<FamilyImportResult>(`/families/${selectedFamilyId}/import`, {
-        method: 'POST',
-        body: JSON.stringify({
-          people: parsed.people,
-          parent_child_relationships: parsed.parent_child_relationships,
-          marriages: parsed.marriages,
-        }),
-      });
-      setNotice(
-        `🧬 GEDCOM импорт амжилттай: ${res.imported_people} хүн, ${res.imported_relationships} холбоос, ${res.imported_marriages} гэрлэлт.`,
-      );
-      await Promise.all([loadData(), refreshOverview()]);
-    } catch (cause) {
-      setError(friendlyError(cause, 'GEDCOM файл уншихад алдаа гарлаа.'));
-    } finally {
-      setBusy(false);
-      if (gedcomInputRef.current) gedcomInputRef.current.value = '';
-    }
-  };
-
   const handleRestoreTrash = async (item: FamilyTrashItem) => {
     if (!selectedFamilyId) return;
     setBusy(true);
@@ -327,30 +206,6 @@ export default function AdminDataPage() {
     }
   };
 
-  const handleArchiveFamily = () => {
-    if (!selectedFamily || !isOwner) return;
-    setConfirmState({
-      isOpen: true,
-      title: '⚠️ Гэр бүлийг архивлах',
-      message: `"${selectedFamily.name}" гэр бүлийг архивласнаар идэвхтэй жагсаалтаас хасагдана. Итгэлтэй байна уу?`,
-      confirmLabel: 'Архивлах',
-      variant: 'danger',
-      onConfirm: async () => {
-        setBusy(true);
-        try {
-          await api(`/families/${selectedFamilyId}`, { method: 'DELETE' });
-          setConfirmState((prev) => ({ ...prev, isOpen: false }));
-          setNotice('Гэр бүлийг архивлалаа.');
-          await reloadFamilies();
-        } catch (cause) {
-          setError(friendlyError(cause, 'Гэр бүлийг архивлах үед алдаа гарлаа.'));
-        } finally {
-          setBusy(false);
-        }
-      },
-    });
-  };
-
   if (!selectedFamily) return null;
 
   return (
@@ -386,70 +241,6 @@ export default function AdminDataPage() {
           </div>
         )}
       </section>
-
-      {canManageData && (
-        <section className="families-main-card">
-          <h3 className="admin-card-title" style={{ marginBottom: 12 }}>
-            📦 Нөөц өгөгдөл татах &amp; оруулах (JSON / GEDCOM 5.5.1)
-          </h3>
-          <p className="admin-muted-text" style={{ marginBottom: 16 }}>
-            Олон улсын ургийн бичгийн GEDCOM (.ged) болон Guulin бүрэн JSON форматаар гэр бүлийн бүртгэлийг нөөцөлж сэргээнэ.
-          </p>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleExportJson()}
-              className="homev2-button homev2-button--light"
-              style={{ fontSize: 12, padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <Download size={14} /> 📦 JSON нөөц татах
-            </button>
-            <input
-              ref={jsonInputRef}
-              type="file"
-              accept=".json"
-              onChange={(e) => void handleImportJson(e)}
-              style={{ display: 'none' }}
-              id="admin-json-import-input"
-              disabled={busy}
-            />
-            <label
-              htmlFor="admin-json-import-input"
-              className="homev2-button homev2-button--light"
-              style={{ fontSize: 12, padding: '8px 14px', cursor: busy ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <Upload size={14} /> 📥 JSON оруулах
-            </label>
-
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleExportGedcom()}
-              className="homev2-button homev2-button--light"
-              style={{ fontSize: 12, padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <Download size={14} /> 🧬 GEDCOM (.ged) татах
-            </button>
-            <input
-              ref={gedcomInputRef}
-              type="file"
-              accept=".ged"
-              onChange={(e) => void handleImportGedcom(e)}
-              style={{ display: 'none' }}
-              id="admin-gedcom-import-input"
-              disabled={busy}
-            />
-            <label
-              htmlFor="admin-gedcom-import-input"
-              className="homev2-button homev2-button--light"
-              style={{ fontSize: 12, padding: '8px 14px', cursor: busy ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <Upload size={14} /> 🧬 GEDCOM оруулах
-            </label>
-          </div>
-        </section>
-      )}
 
       {canManageData && (
         <section className="families-main-card">
@@ -619,22 +410,6 @@ export default function AdminDataPage() {
             </button>
           </form>
 
-          {isOwner && (
-            <div className="admin-danger-box">
-              <h4 className="admin-danger-heading">⚠️ Аюултай бүс: Гэр бүлийг архивлах</h4>
-              <p className="admin-muted-text" style={{ margin: '0 0 12px' }}>
-                Зөвхөн Ерөнхий админ (Owner) энэ гэр бүлийг архивлах боломжтой.
-              </p>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={handleArchiveFamily}
-                className="admin-remove-btn"
-              >
-                🗄️ Гэр бүлийг архивлах
-              </button>
-            </div>
-          )}
         </section>
       )}
 

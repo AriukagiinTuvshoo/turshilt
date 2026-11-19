@@ -276,6 +276,11 @@ class Family(Base):
     name: Mapped[str] = mapped_column(String(180))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     profile_photo_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    parent_family_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("families.id", ondelete="SET NULL", name="fk_families_parent_family_id"),
+        nullable=True,
+        index=True,
+    )
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

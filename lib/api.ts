@@ -66,6 +66,16 @@ export type Family = {
   created_at?: string;
   permissions?: string[];
   admin_title?: string | null;
+  parent_family_id?: string | null;
+  parent_family_name?: string | null;
+};
+export type ConnectHouseholdOut = {
+  household_family_id: string;
+  target_family_id: string;
+  target_family_name: string;
+  linked_persons_count: number;
+  bridge_relation: string;
+  summary: string;
 };
 export type FamilyMemberItem = {
   user_id: string;

@@ -12,9 +12,7 @@ import {
   Menu,
   MessageSquare,
   Settings,
-  ShieldCheck,
   TreeDeciduous,
-  UserRound,
   Users,
   X,
 } from 'lucide-react';
@@ -26,7 +24,7 @@ import { ThemePicker } from './theme-picker';
 import { FamilyChatDrawer } from './family-chat-drawer';
 
 type NavItem = {
-  key: 'dashboard' | 'tree' | 'people' | 'stories' | 'memories' | 'archives' | 'activities' | 'chat' | 'admin' | 'settings';
+  key: 'dashboard' | 'tree' | 'people' | 'stories' | 'memories' | 'archives' | 'activities' | 'chat' | 'settings';
   label: string;
   description: string;
   icon: LucideIcon;
@@ -43,9 +41,10 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'archives', label: 'Архив', description: 'Гэр бүлийн баримт', icon: Archive, path: '/archives', needsFamily: true },
   { key: 'activities', label: 'Сан ба Уулзалт', description: 'Ургийн сан, арга хэмжээ', icon: CalendarHeart, path: '/activities', needsFamily: true },
   { key: 'chat', label: 'Зурвас', description: 'Гэр бүлийн яриа', icon: MessageSquare, path: '/chat', needsFamily: true },
-  { key: 'admin', label: 'Админ удирдлага', description: 'Гишүүд, эрх ба хамгаалалт', icon: ShieldCheck, path: '/admin', needsFamily: true },
   { key: 'settings', label: 'Тохиргоо', description: 'Account ба аюулгүй байдал', icon: Settings, path: '/settings', needsFamily: false },
 ];
+
+const ADMIN_ROLES = new Set(['owner', 'admin', 'editor']);
 
 function isShellRoute(pathname: string) {
   return (
@@ -70,8 +69,6 @@ function isShellRoute(pathname: string) {
     pathname.startsWith('/profile/') ||
     pathname === '/families' ||
     pathname.startsWith('/families/') ||
-    pathname === '/admin' ||
-    pathname.startsWith('/admin/') ||
     pathname === '/invite' ||
     pathname.startsWith('/invite/')
   );
@@ -90,7 +87,6 @@ function activeKey(pathname: string): NavItem['key'] | null {
   if (pathname === '/archives' || pathname.startsWith('/archives/')) return 'archives';
   if (pathname === '/activities' || pathname.startsWith('/activities/')) return 'activities';
   if (pathname === '/chat' || pathname.startsWith('/chat/')) return 'chat';
-  if (pathname === '/admin' || pathname.startsWith('/admin/') || pathname === '/families' || pathname.startsWith('/families/')) return 'admin';
   if (
     pathname === '/settings' ||
     pathname.startsWith('/settings/') ||
@@ -146,6 +142,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
     () => families.find((family) => family.id === familyId) ?? null,
     [families, familyId],
   );
+  const adminFamily = useMemo(() => {
+    if (currentFamily && ADMIN_ROLES.has(currentFamily.role)) return currentFamily;
+    return families.find((family) => ADMIN_ROLES.has(family.role)) ?? null;
+  }, [currentFamily, families]);
 
   const retryContext = useCallback(async () => {
     const requestId = ++contextRequestRef.current;
@@ -374,7 +374,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </span>
           ) : (
             <Link className="app-shell__context-empty" href="/families">
-              Гэр бүлүүд
+              🏡 Ураг ба Миний өрх
             </Link>
           )}
         </div>
@@ -407,25 +407,28 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   href={'/profile?family=' + encodeURIComponent(currentFamily.id) + '&person=' + encodeURIComponent(user.person_id)}
                   onClick={() => setAccountOpen(false)}
                 >
-                  Миний профайл
+                  👤 Миний профайл
                 </Link>
               ) : null}
-              <Link
-                role="menuitem"
-                href={familyHref('/admin', currentFamily?.id ?? null)}
-                onClick={() => setAccountOpen(false)}
-              >
-                Админ удирдлага
-              </Link>
+              {adminFamily ? (
+                <Link
+                  role="menuitem"
+                  className="app-shell__account-admin-link"
+                  href={familyHref('/admin', adminFamily.id)}
+                  onClick={() => setAccountOpen(false)}
+                >
+                  👑 Админы удирдлагын төв
+                </Link>
+              ) : null}
               <Link role="menuitem" href="/families" onClick={() => setAccountOpen(false)}>
-                Гэр бүлүүд
+                🏡 Ураг ба Миний өрх
               </Link>
               <Link
                 role="menuitem"
                 href={familyHref('/settings', currentFamily?.id ?? null)}
                 onClick={() => setAccountOpen(false)}
               >
-                Тохиргоо
+                ⚙️ Тохиргоо
               </Link>
               <button
                 type="button"
@@ -518,7 +521,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <div className="app-shell__sidebar-footer">
               <p>Өнгөрсөн түүхээ танин мэдэж, өнөөдрийн дурсамжаа ирээдүйд өвлүүлэн үлдээе.</p>
               <Link href={familyHref('/families', null)} onClick={() => setMobileOpen(false)}>
-                Гэр бүлүүд →
+                🏡 Ураг ба Миний өрх →
               </Link>
             </div>
           </div>
@@ -528,8 +531,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
           {!families.length && !contextLoading ? (
             <div className="app-shell__no-family" role="status">
               <Users size={18} aria-hidden="true" />
-              <span>Танд одоогоор харагдах family context алга.</span>
-              <Link href="/families">Гэр бүлүүдийг шалгах →</Link>
+              <span>Танд одоогоор харагдах ургийн орчин алга.</span>
+              <Link href="/families">🏡 Ураг ба Миний өрх рүү очих →</Link>
             </div>
           ) : null}
           <div key={familyId || requestedFamilyId || 'no-family-context'}>
