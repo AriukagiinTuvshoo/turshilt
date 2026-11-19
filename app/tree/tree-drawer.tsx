@@ -13,6 +13,7 @@ import {
   StoryListPage,
   TreePerson,
 } from '../../lib/api';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 
 type TabType = 'overview' | 'timeline' | 'oral_history' | 'stories';
 
@@ -233,8 +234,16 @@ export function TreeDrawer({
   }
 
   // Delete Life Event
-  async function handleDeleteEvent(eventId: string) {
-    if (!window.confirm('Та энэ үйл явдлыг устгахдаа итгэлтэй байна уу?')) return;
+  const [pendingDeleteEventId, setPendingDeleteEventId] = useState<string | null>(null);
+
+  function handleDeleteEvent(eventId: string) {
+    setPendingDeleteEventId(eventId);
+  }
+
+  async function confirmDeleteEvent() {
+    if (!pendingDeleteEventId) return;
+    const eventId = pendingDeleteEventId;
+    setPendingDeleteEventId(null);
     setBusy(true);
     setError('');
     try {
@@ -924,6 +933,16 @@ export function TreeDrawer({
           </div>
         )}
       </div>
+      <ConfirmDialog
+        isOpen={pendingDeleteEventId !== null}
+        title="Үйл явдал устгах"
+        message="Та энэ амьдралын үйл явдлыг устгахдаа итгэлтэй байна уу?"
+        confirmLabel="Устгах"
+        variant="danger"
+        busy={busy}
+        onConfirm={() => void confirmDeleteEvent()}
+        onCancel={() => setPendingDeleteEventId(null)}
+      />
     </aside>
   );
 }

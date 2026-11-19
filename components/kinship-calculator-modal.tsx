@@ -39,6 +39,8 @@ export function KinshipCalculatorModal({
 
   useEffect(() => {
     if (!isOpen) return;
+    setSearchA('');
+    setSearchB('');
     const nextA = initialPersonAId || people[0]?.id || '';
     setPersonAId(nextA);
     setPersonBId((prev) => {
@@ -46,7 +48,21 @@ export function KinshipCalculatorModal({
       const other = people.find((p) => p.id !== nextA);
       return other?.id ?? nextA;
     });
-  }, [isOpen, initialPersonAId, people]);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, initialPersonAId, people, onClose]);
+
+  const handleSwap = () => {
+    setPersonAId(personBId);
+    setPersonBId(personAId);
+  };
 
   const personA = useMemo(() => people.find((p) => p.id === personAId), [people, personAId]);
   const personB = useMemo(() => people.find((p) => p.id === personBId), [people, personBId]);
@@ -80,6 +96,12 @@ export function KinshipCalculatorModal({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="kinship-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -134,7 +156,7 @@ export function KinshipCalculatorModal({
               <GitCompare size={20} color="#ffffff" />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, letterSpacing: '-0.2px' }}>
+              <h3 id="kinship-modal-title" style={{ margin: 0, fontSize: '17px', fontWeight: 700, letterSpacing: '-0.2px' }}>
                 Монгол Ургийн Хамаарлын Тооцоолуур
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: '12px', opacity: 0.85 }}>
@@ -143,26 +165,63 @@ export function KinshipCalculatorModal({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: 'rgba(255, 255, 255, 0.12)',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '6px',
-              color: '#ffffff',
-              cursor: 'pointer',
-              display: 'flex',
-            }}
-            title="Хаах"
-          >
-            <X size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {people.length >= 2 && (
+              <button
+                type="button"
+                onClick={handleSwap}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.14)',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  borderRadius: '8px',
+                  padding: '5px 10px',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+                title="Хүмүүсийн байрыг солих (А ↔ Б)"
+              >
+                ⇄ Солих
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Хаах"
+              style={{
+                background: 'rgba(255, 255, 255, 0.12)',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '6px',
+                color: '#ffffff',
+                cursor: 'pointer',
+                display: 'flex',
+              }}
+              title="Хаах"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Body Content */}
         <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '22px' }}>
+          {people.length < 2 && (
+            <div
+              style={{
+                padding: '16px 20px',
+                borderRadius: '12px',
+                background: '#fffbeb',
+                border: '1px solid #fde68a',
+                color: '#92400e',
+                fontSize: '13.5px',
+                lineHeight: 1.5,
+              }}
+            >
+              Ураг төрлийн хамаарал тооцоолохын тулд ургийн модонд дор хаяж 2 хүн бүртгэлтэй байх шаардлагатай.
+            </div>
+          )}
           {/* Person Selection Controls */}
           <div
             style={{

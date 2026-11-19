@@ -126,6 +126,9 @@ function TreePageContent() {
 
   // Kinship Modal State (Unified Mongolian Kinship Calculator)
   const [kinshipInitialPersonId, setKinshipInitialPersonId] = useState<string>('');
+  const [divorceMarriageId, setDivorceMarriageId] = useState<string | null>(null);
+  const [divorceEndDate, setDivorceEndDate] = useState('');
+  const [divorceBusy, setDivorceBusy] = useState(false);
 
   // Bloodline Highlight & Interaction States
   const [bloodlineMode, setBloodlineMode] = useState<BloodlineMode>('none');
@@ -710,29 +713,36 @@ function TreePageContent() {
 
   async function divorce(marriageId: string) {
     if (!familyId || !selectedId) return;
-    const endDate = window.prompt(
-      'Салсан огноо (YYYY-MM-DD). Мэдэхгүй бол хоосон үлдээнэ үү.',
-    );
-    if (endDate === null) return;
+    setDivorceEndDate('');
+    setDivorceMarriageId(marriageId);
+  }
 
+  async function submitDivorce(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!familyId || !selectedId || !divorceMarriageId || divorceBusy) return;
+    setDivorceBusy(true);
     try {
       await api(
         '/families/' +
           encodeURIComponent(familyId) +
           '/marriages/' +
-          encodeURIComponent(marriageId),
+          encodeURIComponent(divorceMarriageId),
         {
           method: 'PATCH',
           body: JSON.stringify({
             status: 'divorced',
-            end_date: endDate || null,
+            end_date: divorceEndDate || null,
           }),
         },
       );
+      setDivorceMarriageId(null);
+      setDivorceEndDate('');
       setNotice('Гэрлэлтийн мэдээлэл шинэчлэгдлээ.');
       await loadTree(familyId, selectedId, depth);
     } catch (cause) {
       setError(treeFriendlyError(cause, 'Гэрлэлтийн мэдээллийг шинэчилж чадсангүй.'));
+    } finally {
+      setDivorceBusy(false);
     }
   }
 
@@ -1545,6 +1555,65 @@ function TreePageContent() {
         marriages={tree?.marriages ?? []}
         initialPersonAId={kinshipInitialPersonId || selectedId || undefined}
       />
+
+      {/* Divorce Date Picker Modal */}
+      {divorceMarriageId && (
+        <div
+          className="tree-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="divorce-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !divorceBusy) setDivorceMarriageId(null);
+          }}
+        >
+          <section className="tree-modal" style={{ maxWidth: '420px', width: '100%' }}>
+            <div className="tree-modal-head">
+              <h2 id="divorce-modal-title">Гэрлэлт цуцалсан төлөв оруулах</h2>
+              <button
+                type="button"
+                className="tree-modal-close"
+                onClick={() => setDivorceMarriageId(null)}
+                disabled={divorceBusy}
+                aria-label="Хаах"
+              >
+                ✕
+              </button>
+            </div>
+            <form className="tree-modal-form" onSubmit={submitDivorce}>
+              <label>
+                <span>Салсан огноо (заавал биш)</span>
+                <input
+                  type="date"
+                  value={divorceEndDate}
+                  onChange={(e) => setDivorceEndDate(e.target.value)}
+                  disabled={divorceBusy}
+                />
+              </label>
+              <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#6b7280' }}>
+                Огноог мэдэхгүй бол хоосон үлдээгээд хадгалж болно.
+              </p>
+              <div className="tree-modal-actions" style={{ marginTop: '14px' }}>
+                <button
+                  type="button"
+                  className="tree-button tree-button--secondary"
+                  onClick={() => setDivorceMarriageId(null)}
+                  disabled={divorceBusy}
+                >
+                  Болих
+                </button>
+                <button
+                  type="submit"
+                  className="tree-button tree-button--primary"
+                  disabled={divorceBusy}
+                >
+                  {divorceBusy ? 'Хадгалж байна…' : 'Хадгалах'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

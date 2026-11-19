@@ -73,15 +73,22 @@ function ChatContent() {
     }
   }, [familyId, initialRecipientId, selectedRecipient]);
 
-  // Fetch messages
+  const requestSeqRef = useRef(0);
+  const inFlightRef = useRef(false);
+
+  // Fetch messages (guarded against stale room overwrites & overlapping polls)
   const loadMessages = useCallback(async (isInitial = false) => {
     if (!familyId) return;
+    if (!isInitial && inFlightRef.current) return;
+    const seq = ++requestSeqRef.current;
+    inFlightRef.current = true;
     try {
       const url =
         activeTab === 'direct' && selectedRecipient
           ? `/families/${familyId}/chat/messages?recipient_id=${selectedRecipient.user_id}`
           : `/families/${familyId}/chat/messages`;
       const data = await api<ChatMessage[]>(url);
+      if (seq !== requestSeqRef.current) return;
       setMessages(data);
       if (isInitial) {
         setTimeout(() => scrollToBottom(false), 50);
@@ -89,7 +96,10 @@ function ChatContent() {
     } catch {
       // Ignored
     } finally {
-      if (isInitial) setLoading(false);
+      if (seq === requestSeqRef.current) {
+        inFlightRef.current = false;
+        if (isInitial) setLoading(false);
+      }
     }
   }, [familyId, activeTab, selectedRecipient, scrollToBottom]);
 
