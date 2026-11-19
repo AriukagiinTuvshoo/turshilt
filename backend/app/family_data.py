@@ -146,7 +146,7 @@ def restore_trash_person(
                             family_person_ids = select(FamilyPerson.person_id).where(
                                 FamilyPerson.family_id == family_id
                             )
-                            existing_edges = db.execute(
+                            existing_edge_rows = db.execute(
                                 select(
                                     ParentChildRelationship.parent_id,
                                     ParentChildRelationship.child_id,
@@ -155,6 +155,9 @@ def restore_trash_person(
                                     ParentChildRelationship.child_id.in_(family_person_ids),
                                 )
                             ).all()
+                            existing_edges = [
+                                (parent_id, child_id) for parent_id, child_id in existing_edge_rows
+                            ]
                             assert_parent_child_is_acyclic(existing_edges, p_id, c_id)
                             db.add(
                                 ParentChildRelationship(
@@ -520,14 +523,15 @@ def import_family_backup_data(
             id_map[raw_old_id] = new_person.id
 
     family_person_ids = select(FamilyPerson.person_id).where(FamilyPerson.family_id == family_id)
-    simulated_edges = list(
-        db.execute(
-            select(ParentChildRelationship.parent_id, ParentChildRelationship.child_id).where(
-                ParentChildRelationship.parent_id.in_(family_person_ids),
-                ParentChildRelationship.child_id.in_(family_person_ids),
-            )
-        ).all()
-    )
+    simulated_edge_rows = db.execute(
+        select(ParentChildRelationship.parent_id, ParentChildRelationship.child_id).where(
+            ParentChildRelationship.parent_id.in_(family_person_ids),
+            ParentChildRelationship.child_id.in_(family_person_ids),
+        )
+    ).all()
+    simulated_edges: list[tuple[UUID, UUID]] = [
+        (parent_id, child_id) for parent_id, child_id in simulated_edge_rows
+    ]
 
     for rel in payload.parent_child_relationships:
         raw_p = str(rel.parent_id or "")
@@ -775,49 +779,49 @@ def merge_duplicate_persons(
 
     # 5. Transfer content tags, life events, and biography
     for sp in db.scalars(select(StoryPerson).where(StoryPerson.person_id == source_id)).all():
-        exists = db.scalar(
+        existing_sp = db.scalar(
             select(StoryPerson).where(
                 StoryPerson.story_id == sp.story_id,
                 StoryPerson.person_id == target_id,
             )
         )
-        if exists:
+        if existing_sp:
             db.delete(sp)
         else:
             sp.person_id = target_id
 
     for ap in db.scalars(select(ArchivePerson).where(ArchivePerson.person_id == source_id)).all():
-        exists = db.scalar(
+        existing_ap = db.scalar(
             select(ArchivePerson).where(
                 ArchivePerson.archive_id == ap.archive_id,
                 ArchivePerson.person_id == target_id,
             )
         )
-        if exists:
+        if existing_ap:
             db.delete(ap)
         else:
             ap.person_id = target_id
 
     for mp in db.scalars(select(MemoryPersonTag).where(MemoryPersonTag.person_id == source_id)).all():
-        exists = db.scalar(
+        existing_mp = db.scalar(
             select(MemoryPersonTag).where(
                 MemoryPersonTag.memory_id == mp.memory_id,
                 MemoryPersonTag.person_id == target_id,
             )
         )
-        if exists:
+        if existing_mp:
             db.delete(mp)
         else:
             mp.person_id = target_id
 
     for pp in db.scalars(select(PhotoPersonTag).where(PhotoPersonTag.person_id == source_id)).all():
-        exists = db.scalar(
+        existing_pp = db.scalar(
             select(PhotoPersonTag).where(
                 PhotoPersonTag.photo_id == pp.photo_id,
                 PhotoPersonTag.person_id == target_id,
             )
         )
-        if exists:
+        if existing_pp:
             db.delete(pp)
         else:
             pp.person_id = target_id
@@ -873,7 +877,7 @@ def merge_duplicate_persons(
             PersonGuardianship.revoked_at.is_(None),
         )
     ).all():
-        exists = db.scalar(
+        existing_guard = db.scalar(
             select(PersonGuardianship).where(
                 PersonGuardianship.family_id == family_id,
                 PersonGuardianship.person_id == target_id,
@@ -883,7 +887,7 @@ def merge_duplicate_persons(
                 PersonGuardianship.revoked_at.is_(None),
             )
         )
-        if exists:
+        if existing_guard:
             db.delete(g)
         else:
             g.person_id = target_id

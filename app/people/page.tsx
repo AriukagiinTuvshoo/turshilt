@@ -337,7 +337,7 @@ function PeoplePageContent() {
       }
       return true;
     });
-  }, [people?.items, ownershipFilter, generationFilter, currentUser]);
+  }, [people, ownershipFilter, generationFilter, currentUser]);
 
   const stats = useMemo(() => {
     const items = people?.items ?? [];

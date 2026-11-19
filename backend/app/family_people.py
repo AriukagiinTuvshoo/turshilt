@@ -48,6 +48,31 @@ from app.privacy import (
 router = APIRouter()
 
 
+def _clean_profile_photo_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    lowered = cleaned.lower()
+    if lowered.startswith(("https://", "http://")):
+        return cleaned
+    if cleaned.startswith("/") and not cleaned.startswith("//"):
+        return cleaned
+    raise ValueError("Зургийн холбоос нь зөвхөн https://, http:// эсвэл дотоод / зам байх ёстой.")
+
+
+def _validate_person_dates(person: "PersonCreate | PersonPatch") -> None:
+    if person.first_name is not None and not person.first_name.strip():
+        raise ValueError("Нэр хоосон байж болохгүй.")
+    if person.birth_date and person.birth_date > datetime.now(UTC).date():
+        raise ValueError("Төрсөн огноо ирээдүйд байж болохгүй.")
+    if person.death_date and person.birth_date and person.death_date < person.birth_date:
+        raise ValueError("Нас барсан огноо төрсөн огнооноос өмнө байж болохгүй.")
+    if person.is_alive and person.death_date:
+        raise ValueError("Амьд хүний нас барсан огноог бөглөж болохгүй.")
+
+
 class PersonCreate(BaseModel):
     first_name: str = Field(min_length=1, max_length=120)
     last_name: str = Field(default="", max_length=120)
@@ -66,43 +91,40 @@ class PersonCreate(BaseModel):
     @field_validator("profile_photo_url")
     @classmethod
     def validate_profile_photo_url(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        cleaned = value.strip()
-        if not cleaned:
-            return None
-        lowered = cleaned.lower()
-        if lowered.startswith(("https://", "http://")):
-            return cleaned
-        if cleaned.startswith("/") and not cleaned.startswith("//"):
-            return cleaned
-        raise ValueError("Зургийн холбоос нь зөвхөн https://, http:// эсвэл дотоод / зам байх ёстой.")
+        return _clean_profile_photo_url(value)
 
     @model_validator(mode="after")
     def check_dates(self):
-        if self.first_name is not None and not self.first_name.strip():
-            raise ValueError("Нэр хоосон байж болохгүй.")
-        if self.birth_date and self.birth_date > datetime.now(UTC).date():
-            raise ValueError("Төрсөн огноо ирээдүйд байж болохгүй.")
-        if self.death_date and self.birth_date and self.death_date < self.birth_date:
-            raise ValueError("Нас барсан огноо төрсөн огнооноос өмнө байж болохгүй.")
-        if self.is_alive and self.death_date:
-            raise ValueError("Амьд хүний нас барсан огноог бөглөж болохгүй.")
+        _validate_person_dates(self)
         return self
 
 
-class PersonPatch(PersonCreate):
+class PersonPatch(BaseModel):
     first_name: str | None = Field(default=None, min_length=1, max_length=120)
     last_name: str | None = Field(default=None, max_length=120)
+    middle_name: str | None = Field(default=None, max_length=120)
+    nickname: str | None = Field(default=None, max_length=120)
     gender: str | None = Field(default=None, pattern="^(female|male|other|unknown)$")
+    birth_date: date | None = None
+    birth_place: str | None = Field(default=None, max_length=240)
     is_alive: bool | None = None
+    death_date: date | None = None
+    death_place: str | None = Field(default=None, max_length=240)
+    short_description: str | None = Field(default=None, max_length=1000)
+    profile_photo_url: str | None = Field(default=None, max_length=1000)
     visibility: str | None = Field(default=None, pattern="^(private|family|public)$")
 
+    @field_validator("profile_photo_url")
+    @classmethod
+    def validate_profile_photo_url(cls, value: str | None) -> str | None:
+        return _clean_profile_photo_url(value)
+
     @model_validator(mode="after")
-    def reject_null_required_fields(self):
+    def reject_null_required_fields_and_check_dates(self):
         for field in ("first_name", "gender", "is_alive", "visibility"):
             if field in self.model_fields_set and getattr(self, field) is None:
                 raise ValueError(f"{field} талбарыг хоосон болгох боломжгүй.")
+        _validate_person_dates(self)
         return self
 
 

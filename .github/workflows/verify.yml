@@ -20,6 +20,8 @@ jobs:
           cache: npm
       - name: Install frontend dependencies
         run: npm ci
+      - name: ESLint & Accessibility checks
+        run: npm run lint
       - name: TypeScript typecheck
         run: npm run typecheck
       - name: Frontend unit tests
@@ -64,7 +66,13 @@ jobs:
         run: uv run pytest
         working-directory: backend
       - name: Run Ruff
-        run: uv run ruff check app tests migrations
+        run: uv run ruff check app tests migrations scripts
+        working-directory: backend
+      - name: Run Mypy
+        run: uv run mypy app
+        working-directory: backend
+      - name: Verify OpenAPI TypeScript Contract
+        run: uv run python scripts/verify_api_contract.py
         working-directory: backend
       - name: Alembic upgrade
         run: uv run alembic upgrade head

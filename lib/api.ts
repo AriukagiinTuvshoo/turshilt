@@ -58,7 +58,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export type User = { id: string; email: string | null; display_name: string; person_id: string | null };
-export type Family = { id: string; name: string; description: string | null; role: string };
+export type Family = { id: string; name: string; description: string | null; role: string; created_at?: string };
 export type Person = {
   id: string;
   first_name: string;
@@ -78,6 +78,8 @@ export type Person = {
   can_edit?: boolean;
   can_delete?: boolean;
   is_minor?: boolean;
+  created_at?: string;
+  updated_at?: string;
 };
 export type TreeData = {
   persons: TreePerson[];
@@ -170,12 +172,16 @@ export type LineageSummary = {
   family_id: string;
   name: string;
   description: string | null;
+  created_at?: string;
+  updated_at?: string;
 };
 export type BranchSummary = {
   id: string;
   lineage_id: string;
   name: string;
   description: string | null;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type ArchivePerson = {
@@ -363,10 +369,80 @@ export type FamilyTrashItem = {
 
 export type FamilyImportResult = {
   success: boolean;
+  dry_run?: boolean;
   imported_people: number;
   imported_relationships: number;
   imported_marriages: number;
   warnings?: string[];
+};
+
+export type Fund = {
+  id: string;
+  family_id: string;
+  title: string;
+  purpose: string;
+  currency: string;
+  payment_instruction: string;
+  visibility: 'family' | 'public';
+  is_active: boolean;
+  confirmed_income_minor: number;
+  total_expenses_minor: number;
+  net_balance_minor: number;
+  created_at: string;
+};
+
+export type PublicFund = Fund & {
+  family_name: string;
+};
+
+export type Donation = {
+  id: string;
+  fund_id: string;
+  amount_minor: number;
+  currency: string;
+  status: 'pledged' | 'reported' | 'confirmed' | 'cancelled' | string;
+  donor_name: string | null;
+  private_donor: boolean;
+  is_mine?: boolean;
+  created_at: string;
+};
+
+export type FundExpense = {
+  id: string;
+  fund_id: string;
+  amount_minor: number;
+  currency: string;
+  title: string;
+  note: string;
+  spent_at: string;
+  recorded_by_name: string | null;
+  created_at: string;
+};
+
+export type FamilyEvent = {
+  id: string;
+  family_id: string;
+  title: string;
+  description: string;
+  starts_at: string;
+  location: string;
+  registration_deadline: string | null;
+  capacity: number | null;
+  adult_fee_minor: number;
+  child_fee_minor: number;
+  currency: string;
+  payment_instruction: string;
+};
+
+export type EventRegistration = {
+  id: string;
+  event_id: string;
+  user_id: string;
+  adult_count: number;
+  child_count: number;
+  status: 'registered' | 'cancelled' | string;
+  payment_status: 'unpaid' | 'reported' | 'confirmed' | string;
+  created_at: string;
 };
 
 

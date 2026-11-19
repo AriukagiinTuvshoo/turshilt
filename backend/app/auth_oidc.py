@@ -6,12 +6,14 @@ import hmac
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -102,14 +104,17 @@ def _google_state_key(state: str) -> str:
 
 def _consume_google_state(db: Session, state: str) -> bool:
     now = datetime.now(UTC)
-    result = db.execute(
-        update(LoginThrottle)
-        .where(
-            LoginThrottle.key_hash == _google_state_key(state),
-            LoginThrottle.attempts == 0,
-            LoginThrottle.window_started >= now - timedelta(seconds=GOOGLE_STATE_SECONDS),
-        )
-        .values(attempts=1)
+    result = cast(
+        CursorResult[Any],
+        db.execute(
+            update(LoginThrottle)
+            .where(
+                LoginThrottle.key_hash == _google_state_key(state),
+                LoginThrottle.attempts == 0,
+                LoginThrottle.window_started >= now - timedelta(seconds=GOOGLE_STATE_SECONDS),
+            )
+            .values(attempts=1)
+        ),
     )
     db.commit()
     return result.rowcount == 1

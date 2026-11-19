@@ -88,6 +88,7 @@ async def request_context(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
     context_token = request_id_context.set(request_id)
+    error_code: str | None = None
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         origin = request.headers.get("origin")
         if origin and origin not in settings.cors_origin_list:
@@ -119,7 +120,8 @@ async def request_context(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     duration_ms = round((time.perf_counter() - started) * 1000, 2)
     route = getattr(request.scope.get("route"), "path", "unmatched")
-    rate_limit_namespace = None
+    rate_limit_namespace: str | None = None
+    error_code = None
     log_level = logging.WARNING if (
         duration_ms >= settings.slow_request_threshold_ms or response.status_code >= 400
     ) else logging.INFO

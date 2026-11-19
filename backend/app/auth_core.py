@@ -7,6 +7,7 @@ import ipaddress
 import logging
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
@@ -205,16 +206,20 @@ def _consume_otp_rate(db: Session, kind: str, value: str, limit: int) -> bool:
     key = _otp_rate_key(kind, value)
     table = LoginThrottle.__table__
     dialect = db.get_bind().dialect.name
-    insert = pg_insert if dialect == "postgresql" else sqlite_insert
-    statement = insert(table).values(key_hash=key, window_started=now, attempts=1)
+    insert_fn: Any = pg_insert if dialect == "postgresql" else sqlite_insert
     fresh_window = table.c.window_started < now - timedelta(minutes=1)
-    statement = statement.on_conflict_do_update(
-        index_elements=[table.c.key_hash],
-        set_={
-            "window_started": case((fresh_window, now), else_=table.c.window_started),
-            "attempts": case((fresh_window, 1), else_=table.c.attempts + 1),
-        },
-    ).returning(table.c.attempts)
+    statement = (
+        insert_fn(LoginThrottle)
+        .values(key_hash=key, window_started=now, attempts=1)
+        .on_conflict_do_update(
+            index_elements=[table.c.key_hash],
+            set_={
+                "window_started": case((fresh_window, now), else_=table.c.window_started),
+                "attempts": case((fresh_window, 1), else_=table.c.attempts + 1),
+            },
+        )
+        .returning(table.c.attempts)
+    )
     attempts = db.execute(statement).scalar_one()
     db.commit()
     return attempts <= limit
@@ -277,16 +282,20 @@ def _record_login_attempt(db: Session, email: str, ip: str) -> int:
     key = hashlib.sha256(f"{email}\0{ip}".encode()).hexdigest()
     table = LoginThrottle.__table__
     dialect = db.get_bind().dialect.name
-    insert = pg_insert if dialect == "postgresql" else sqlite_insert
-    statement = insert(table).values(key_hash=key, window_started=now, attempts=1)
+    insert_fn: Any = pg_insert if dialect == "postgresql" else sqlite_insert
     fresh_window = table.c.window_started < now - timedelta(minutes=1)
-    statement = statement.on_conflict_do_update(
-        index_elements=[table.c.key_hash],
-        set_={
-            "window_started": case((fresh_window, now), else_=table.c.window_started),
-            "attempts": case((fresh_window, 1), else_=table.c.attempts + 1),
-        },
-    ).returning(table.c.attempts)
+    statement = (
+        insert_fn(LoginThrottle)
+        .values(key_hash=key, window_started=now, attempts=1)
+        .on_conflict_do_update(
+            index_elements=[table.c.key_hash],
+            set_={
+                "window_started": case((fresh_window, now), else_=table.c.window_started),
+                "attempts": case((fresh_window, 1), else_=table.c.attempts + 1),
+            },
+        )
+        .returning(table.c.attempts)
+    )
     attempts = db.execute(statement).scalar_one()
     db.commit()
     return attempts
@@ -379,20 +388,21 @@ def _verification_link_for_user(
     background_tasks: BackgroundTasks,
     request_id: str | None,
 ) -> None:
-    if user.email_verified_at is not None:
+    if user.email_verified_at is not None or not user.email:
         return
+    normalized_user_email = normalize_email(user.email)
     identity = db.scalar(
         select(LoginIdentity).where(
             LoginIdentity.user_id == user.id,
             LoginIdentity.provider == "email",
-            LoginIdentity.normalized_identifier == normalize_email(user.email),
+            LoginIdentity.normalized_identifier == normalized_user_email,
         )
     )
     if identity is None:
         identity = LoginIdentity(
             user_id=user.id,
             provider="email",
-            normalized_identifier=normalize_email(user.email),
+            normalized_identifier=normalized_user_email,
             display_identifier=user.email,
         )
         db.add(identity)
@@ -522,12 +532,16 @@ def confirm_email_verification(
             detail="Баталгаажуулах холбоос хүчингүй эсвэл хугацаа дууссан байна.",
         )
     user = db.get(User, row.user_id)
-    identity = db.scalar(
-        select(LoginIdentity).where(
-            LoginIdentity.user_id == row.user_id,
-            LoginIdentity.provider == "email",
-            LoginIdentity.normalized_identifier == normalize_email(user.email) if user else False,
+    identity = (
+        db.scalar(
+            select(LoginIdentity).where(
+                LoginIdentity.user_id == row.user_id,
+                LoginIdentity.provider == "email",
+                LoginIdentity.normalized_identifier == normalize_email(user.email),
+            )
         )
+        if user and user.email
+        else None
     )
     consumed_user_id = db.execute(
         update(EmailVerificationToken)
@@ -637,7 +651,13 @@ def confirm_email_password_reset(
         ).scalar_one_or_none()
     if consumed_user_id is None or user is None:
         if user:
-            _audit_auth_event(db, user.id, "password_reset_failed", "password_reset_token", row.id)
+            _audit_auth_event(
+                db,
+                user.id,
+                "password_reset_failed",
+                "password_reset_token",
+                row.id if row is not None else None,
+            )
             db.commit()
         logger.info(
             "Password reset rejected",

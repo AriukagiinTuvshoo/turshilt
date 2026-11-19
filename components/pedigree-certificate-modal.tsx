@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Download, Printer, X, Shield, Award, Check } from 'lucide-react';
 import { Family, FamilyStats, Person } from '../lib/api';
+import { useFocusTrap } from '../lib/use-focus-trap';
 
 export interface PedigreeCertificateModalProps {
   isOpen: boolean;
@@ -29,6 +30,9 @@ export function PedigreeCertificateModal({
   const [customNote, setCustomNote] = useState(
     'Өв соёл, цусан холбоо, удмын сүлжээг үеийн үед бататган нандигнав.'
   );
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(isOpen && Boolean(family), dialogRef, { onEscape: onClose });
 
   const issueDateStr = useMemo(() => {
     const now = new Date();
@@ -80,6 +84,12 @@ export function PedigreeCertificateModal({
   return (
     <div
       className="pedigree-certificate-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="certificate-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -94,6 +104,8 @@ export function PedigreeCertificateModal({
       }}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className="pedigree-certificate-container"
         style={{
           background: 'var(--ui-surface)',
@@ -124,7 +136,7 @@ export function PedigreeCertificateModal({
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Award size={22} style={{ color: 'var(--ui-accent-bright)' }} />
             <div>
-              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--ui-text)' }}>
+              <h3 id="certificate-modal-title" style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--ui-text)' }}>
                 Монгол Ургийн Батламж үүсгэх
               </h3>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--ui-text-muted)' }}>

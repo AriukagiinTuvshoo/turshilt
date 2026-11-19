@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -112,11 +113,12 @@ def _emit_pg_notify(envelope_json: str, db: Session | None = None) -> bool:
     bind = db.get_bind() if db is not None else engine
     if bind is None or bind.dialect.name != "postgresql":
         return False
+    connect_target = bind.engine if isinstance(bind, Connection) else bind
     if len(envelope_json.encode("utf-8")) > CHAT_NOTIFY_MAX_BYTES:
         logger.warning("Chat PG notification payload exceeds safe byte limit")
         return False
     try:
-        with bind.connect() as conn:
+        with connect_target.connect() as conn:
             conn.execute(
                 text("SELECT pg_notify(:channel, :payload)"),
                 {"channel": CHAT_NOTIFY_CHANNEL, "payload": envelope_json},

@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent } from 'react';
+import { FormEvent, useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -80,6 +80,7 @@ export function AdminMembersSection({
   handleSendInvite,
   handleRevokeInvite,
 }: AdminMembersSectionProps) {
+  const [nowMs] = useState(() => Date.now());
   return (
     <>
       {activeTab === 'members' && (
@@ -334,7 +335,7 @@ export function AdminMembersSection({
               {invitations.map((inv) => {
                 const daysLeft = Math.max(
                   0,
-                  Math.ceil((new Date(inv.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+                  Math.ceil((new Date(inv.expires_at).getTime() - nowMs) / (1000 * 60 * 60 * 24)),
                 );
                 return (
                   <div key={inv.id} className="admin-item-row">

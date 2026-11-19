@@ -7,8 +7,10 @@ import logging
 import re
 import time
 import warnings
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import PurePath
+from typing import Any
 from urllib.parse import unquote
 from uuid import UUID, uuid4
 
@@ -120,8 +122,12 @@ def _visible_memory(db: Session, family_id: UUID, memory_id: UUID, user: User) -
     return memory
 
 
-def _photo_payload(photo: Photo, person_ids: list[UUID] | None = None) -> dict:
-    return {
+def _photo_payload(
+    photo: Photo,
+    person_ids: list[UUID] | None = None,
+    tagged_people: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "id": photo.id,
         "title": photo.title,
         "created_at": photo.created_at,
@@ -129,6 +135,9 @@ def _photo_payload(photo: Photo, person_ids: list[UUID] | None = None) -> dict:
         "content_url": f"/families/{photo.family_id}/photos/{photo.id}/content",
         "person_ids": person_ids or [],
     }
+    if tagged_people is not None:
+        payload["tagged_people"] = tagged_people
+    return payload
 
 
 def _image_payload(filename: str, content_type: str, data: bytes) -> tuple[str, int, int, bytes]:
@@ -151,13 +160,13 @@ def _image_payload(filename: str, content_type: str, data: bytes) -> tuple[str, 
                 width, height = image.size
                 if width < 1 or height < 1 or width * height > MAX_IMAGE_PIXELS:
                     raise HTTPException(status_code=413, detail="Зургийн пикселийн хэмжээ хэт том байна.")
-                image = ImageOps.exif_transpose(image)
-                image.info.clear()
-                image.thumbnail(THUMBNAIL_MAX_SIZE, Image.Resampling.LANCZOS)
-                image = image.convert("RGB")
-                image.info.clear()
+                processed: Image.Image = ImageOps.exif_transpose(image)
+                processed.info.clear()
+                processed.thumbnail(THUMBNAIL_MAX_SIZE, Image.Resampling.LANCZOS)
+                rgb_image = processed.convert("RGB")
+                rgb_image.info.clear()
                 thumbnail = io.BytesIO()
-                image.save(thumbnail, format="JPEG", quality=82, optimize=True, exif=b"")
+                rgb_image.save(thumbnail, format="JPEG", quality=82, optimize=True, exif=b"")
                 return mime_type, width, height, thumbnail.getvalue()
     except HTTPException:
         raise
@@ -205,7 +214,7 @@ def _expected_object_keys(photo: Photo) -> tuple[str, str]:
 
 
 def _tagged_photo_visibility(
-    db: Session, family_id: UUID, user: User, photos: list[Photo]
+    db: Session, family_id: UUID, user: User, photos: Sequence[Photo]
 ) -> set[UUID]:
     """Return photos whose every tag is visible in this family and guardian context."""
     photo_ids = [photo.id for photo in photos]
@@ -446,7 +455,7 @@ def list_memories(
     ).all() if ranked_photos is not None else []
     photos_by_memory: dict[UUID, list[Photo]] = {memory_id: [] for memory_id in ids}
     for photo in photo_rows:
-        if len(photos_by_memory[photo.memory_id]) < 12:
+        if photo.memory_id is not None and len(photos_by_memory[photo.memory_id]) < 12:
             photos_by_memory[photo.memory_id].append(photo)
     page_photos = [photo for batch in photos_by_memory.values() for photo in batch]
     visible_photo_ids = _tagged_photo_visibility(db, family_id, user, page_photos)
@@ -587,11 +596,11 @@ async def upload_photo(
         storage.put(original_key, bytes(data), mime_type)
         storage.put(thumbnail_key, thumbnail, "image/jpeg")
         storage_duration_ms = round((time.perf_counter() - storage_started) * 1000, 2)
-        photo = db.get(Photo, photo_id)
-        if photo is None:
+        stored_photo = db.get(Photo, photo_id)
+        if stored_photo is None:
             raise SQLAlchemyError("Photo upload record disappeared")
-        photo.storage_status = "ready"
-        _audit(db, user, family_id, "photo.created", "photo", photo.id)
+        stored_photo.storage_status = "ready"
+        _audit(db, user, family_id, "photo.created", "photo", stored_photo.id)
         db.commit()
         logger.info(
             "Photo objects stored",
@@ -602,11 +611,11 @@ async def upload_photo(
         )
     except Exception as error:
         db.rollback()
-        photo = db.get(Photo, photo_id)
-        if photo is not None:
-            photo.storage_status = "deletion_pending"
-            photo.cleanup_attempts += 1
-            _audit(db, user, family_id, "photo.upload_failed", "photo", photo.id)
+        failed_photo = db.get(Photo, photo_id)
+        if failed_photo is not None:
+            failed_photo.storage_status = "deletion_pending"
+            failed_photo.cleanup_attempts += 1
+            _audit(db, user, family_id, "photo.upload_failed", "photo", failed_photo.id)
             try:
                 db.commit()
             except SQLAlchemyError as state_error:
@@ -646,7 +655,7 @@ async def upload_photo(
                    "provider": settings.storage_provider},
         )
         raise HTTPException(status_code=503, detail="Зургийг хадгалж чадсангүй.") from error
-    return _photo_payload(photo)
+    return _photo_payload(stored_photo)
 
 
 @router.get("/{family_id}/memories/{memory_id}/photos", response_model=list[PhotoResponse])
@@ -700,35 +709,34 @@ def list_person_photos(
     person = _person_in_family(db, family_id, person_id)
     _assert_person_visible(db, person, user)
     _require_minor_scope(db, family_id, person, user, "view_profile")
-    visible_memory_ids = select(Memory.id).where(
+    visible_memory_query = select(Memory.id).where(
         Memory.family_id == family_id,
         or_(Memory.visibility != "private", Memory.created_by == user.id),
     )
-    conditions = (
-        Photo.family_id == family_id,
-        Photo.storage_status == "ready",
-        Photo.memory_id.in_(visible_memory_ids),
-        Photo.id.in_(select(PhotoPersonTag.photo_id).where(
-            PhotoPersonTag.person_id == person_id
-        )),
-    )
     memory_rows = db.scalars(
-        select(Memory).where(Memory.id.in_(visible_memory_ids))
+        select(Memory).where(Memory.id.in_(visible_memory_query))
     ).all()
-    visible_memory_ids = {
+    visible_memory_id_set = {
         memory.id for memory in memory_rows
         if _memory_media_visible(db, family_id, user, memory)
     }
-    conditions = (*conditions, Photo.memory_id.in_(visible_memory_ids))
-    photos = db.scalars(
+    conditions: list[Any] = [
+        Photo.family_id == family_id,
+        Photo.storage_status == "ready",
+        Photo.memory_id.in_(visible_memory_id_set),
+        Photo.id.in_(select(PhotoPersonTag.photo_id).where(
+            PhotoPersonTag.person_id == person_id
+        )),
+    ]
+    raw_photos = db.scalars(
         select(Photo).where(*conditions).order_by(Photo.created_at.desc(), Photo.id.desc())
         .offset((page - 1) * page_size).limit(page_size + 1)
     ).all()
-    photos = photos[:page_size]
-    visible_photo_ids = _tagged_photo_visibility(db, family_id, user, photos)
-    photos = [photo for photo in photos if photo.id in visible_photo_ids]
+    page_photos = list(raw_photos)[:page_size]
+    visible_photo_ids = _tagged_photo_visibility(db, family_id, user, page_photos)
+    visible_photos = [photo for photo in page_photos if photo.id in visible_photo_ids]
     return {
-        "items": [_photo_payload(photo, [person_id]) for photo in photos],
+        "items": [_photo_payload(photo, [person_id]) for photo in visible_photos],
         "page": page, "page_size": page_size,
     }
 
@@ -974,7 +982,7 @@ async def upload_person_avatar(
         or person.created_by == user.id
     )
     if is_minor_record:
-        _require_minor_scope(db, user, family_id, person, "edit_profile")
+        _require_minor_scope(db, family_id, person, user, "edit_profile")
     elif not baseline_edit:
         raise HTTPException(status_code=403, detail="Энэ хүний зургийг өөрчлөх эрхгүй.")
 
@@ -1028,7 +1036,7 @@ def get_person_avatar(
     person = _person_in_family(db, family_id, person_id)
     _assert_person_visible(db, person, user)
     if is_minor(person.birth_date) is True:
-        _require_minor_scope(db, user, family_id, person, "view_profile")
+        _require_minor_scope(db, family_id, person, user, "view_profile")
 
     key = f"families/{family_id}/persons/{person_id}/avatar.webp"
     if not storage.exists(key):

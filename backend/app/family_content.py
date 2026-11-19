@@ -1,6 +1,7 @@
 """Family Archives and Stories endpoints."""
 
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from uuid import UUID
 
@@ -719,7 +720,7 @@ def update_story(
     story.updated_at = datetime.now(UTC)
     _audit(db, user, family_id, "story.updated", "story", story.id)
     _commit(db, "Ижил түүхийн холбоос давхар үүссэн байна.")
-    people = _story_people(db, family_id, [story.id], user).get(story.id, [])
+    story_people_out = _story_people(db, family_id, [story.id], user).get(story.id, [])
     author_name = db.scalar(select(User.display_name).where(User.id == story.created_by)) or "Нэргүй хэрэглэгч"
     is_admin = member.role in {"owner", "editor"}
     can_mutate = is_admin or (story.created_by == user.id)
@@ -733,8 +734,8 @@ def update_story(
         visibility=story.visibility,
         author_id=story.created_by,
         author_name=author_name,
-        related_people_count=len(people),
-        related_people=people,
+        related_people_count=len(story_people_out),
+        related_people=story_people_out,
         created_at=story.created_at,
         updated_at=story.updated_at,
         can_edit=can_mutate,
@@ -778,7 +779,7 @@ class MemoryInput(BaseModel):
 
 
 def _assert_memory_minor_scopes(
-    db: Session, family_id: UUID, user: User, person_ids: list[UUID]
+    db: Session, family_id: UUID, user: User, person_ids: Sequence[UUID]
 ) -> None:
     for person_id in set(person_ids):
         person = _person_in_family(db, family_id, person_id)
@@ -963,7 +964,7 @@ def list_person_memories(
         db, family_id, user, [item.id for item in memories]
     )
     visible_memories = [item for item in memories if item.id in visible_ids]
-    memory_ids = [item.id for item in visible_memories]
+    visible_memory_ids = [item.id for item in visible_memories]
     own_link = db.scalar(
         select(UserPersonLink.person_id).where(UserPersonLink.user_id == user.id)
     )
@@ -979,7 +980,7 @@ def list_person_memories(
             .join(Person, Person.id == MemoryPersonTag.person_id)
             .join(FamilyPerson, FamilyPerson.person_id == Person.id)
             .where(
-                MemoryPersonTag.memory_id.in_(memory_ids),
+                MemoryPersonTag.memory_id.in_(visible_memory_ids),
                 FamilyPerson.family_id == family_id,
                 or_(
                     Person.visibility != "private",
@@ -989,7 +990,7 @@ def list_person_memories(
             )
             .order_by(MemoryPersonTag.memory_id, Person.last_name, Person.first_name)
         ).all()
-        if memory_ids
+        if visible_memory_ids
         else []
     )
     names_by_memory: dict[UUID, list[str]] = {}
@@ -1000,7 +1001,7 @@ def list_person_memories(
             " ".join(part for part in (last_name, first_name, middle_name) if part)
         )
     like_counts, liked_by_me_ids, liked_names, comment_counts = _memory_engagement_batch(
-        db, memory_ids, user.id
+        db, visible_memory_ids, user.id
     )
 
     return [

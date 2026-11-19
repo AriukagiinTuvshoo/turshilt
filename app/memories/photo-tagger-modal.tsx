@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, ApiError, API_BASE, PersonSearchPage } from '../../lib/api';
 import { ConfirmDialog } from '../../components/confirm-dialog';
+import { useFocusTrap } from '../../lib/use-focus-trap';
 
 export type PhotoItem = {
   id: string;
@@ -50,6 +51,13 @@ export function PhotoTaggerModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(Boolean(isOpen && photo), dialogRef, {
+    onEscape: onClose,
+    disabled: confirmDeleteOpen || busy,
+  });
 
   // Sync state when active photo changes
   useEffect(() => {
@@ -147,8 +155,6 @@ export function PhotoTaggerModal({
     }
   }
 
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-
   function handleDeletePhoto() {
     setConfirmDeleteOpen(true);
   }
@@ -172,6 +178,8 @@ export function PhotoTaggerModal({
   return (
     <div className="photo-modal-backdrop" onClick={onClose} role="presentation">
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className="photo-modal-panel"
         onClick={(e) => e.stopPropagation()}
         role="dialog"

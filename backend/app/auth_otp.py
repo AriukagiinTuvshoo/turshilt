@@ -168,9 +168,9 @@ def _create_phone_challenge(
     try:
         sms.send_otp(phone, code, purpose)
     except Exception as error:
-        challenge = db.get(PhoneOtpChallenge, challenge_id)
-        if challenge:
-            challenge.status = "expired"
+        stale = db.get(PhoneOtpChallenge, challenge_id)
+        if stale is not None:
+            stale.status = "expired"
             db.commit()
         raise HTTPException(
             status_code=503, detail="Код илгээж чадсангүй. Түр хүлээгээд дахин оролдоно уу."
@@ -280,8 +280,9 @@ def request_phone_link(
         sms=sms,
     )
     challenge = db.get(PhoneOtpChallenge, response.challenge_id)
-    _audit(db, user.id, "phone.otp_requested", challenge)
-    db.commit()
+    if challenge is not None:
+        _audit(db, user.id, "phone.otp_requested", challenge)
+        db.commit()
     return response
 
 
@@ -460,8 +461,9 @@ def request_phone_login(
     )
     if identity:
         item = db.get(PhoneOtpChallenge, challenge.challenge_id)
-        _audit(db, identity.user_id, "phone.otp_requested", item)
-        db.commit()
+        if item is not None:
+            _audit(db, identity.user_id, "phone.otp_requested", item)
+            db.commit()
     return challenge
 
 
@@ -516,8 +518,9 @@ def request_phone_recovery(
     )
     if identity:
         item = db.get(PhoneOtpChallenge, challenge.challenge_id)
-        _audit(db, identity.user_id, "phone.otp_requested", item)
-        db.commit()
+        if item is not None:
+            _audit(db, identity.user_id, "phone.otp_requested", item)
+            db.commit()
     return challenge
 
 

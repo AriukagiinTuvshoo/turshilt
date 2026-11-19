@@ -3,76 +3,19 @@
 import Link from 'next/link';
 import { FormEvent, Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ApiError, api, Family } from '../../lib/api';
+import {
+  ApiError,
+  api,
+  Donation,
+  EventRegistration,
+  Family,
+  FamilyEvent,
+  Fund,
+  FundExpense,
+  PublicFund,
+} from '../../lib/api';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import './activities.css';
-
-type Fund = {
-  id: string;
-  family_id: string;
-  title: string;
-  purpose: string;
-  currency: string;
-  payment_instruction: string;
-  visibility: 'family' | 'public';
-  is_active: boolean;
-  confirmed_income_minor: number;
-  total_expenses_minor: number;
-  net_balance_minor: number;
-  created_at: string;
-};
-
-type PublicFund = Fund & { family_name: string };
-
-type Donation = {
-  id: string;
-  fund_id: string;
-  amount_minor: number;
-  currency: string;
-  status: 'pledged' | 'reported' | 'confirmed' | 'cancelled' | string;
-  donor_name: string | null;
-  private_donor: boolean;
-  is_mine?: boolean;
-  created_at: string;
-};
-
-type FundExpense = {
-  id: string;
-  fund_id: string;
-  amount_minor: number;
-  currency: string;
-  title: string;
-  note: string;
-  spent_at: string;
-  recorded_by_name: string | null;
-  created_at: string;
-};
-
-type FamilyEvent = {
-  id: string;
-  family_id: string;
-  title: string;
-  description: string;
-  starts_at: string;
-  location: string;
-  registration_deadline: string | null;
-  capacity: number | null;
-  adult_fee_minor: number;
-  child_fee_minor: number;
-  currency: string;
-  payment_instruction: string;
-};
-
-type Registration = {
-  id: string;
-  event_id: string;
-  user_id: string;
-  adult_count: number;
-  child_count: number;
-  status: 'registered' | 'cancelled' | string;
-  payment_status: 'unpaid' | 'reported' | 'confirmed' | string;
-  created_at: string;
-};
 
 const root = (id: string) => `/families/${encodeURIComponent(id)}`;
 const money = (amountMinor: number, currency: string) =>
@@ -173,8 +116,8 @@ function ActivitiesContent() {
   const [donations, setDonations] = useState<Record<string, Donation[]>>({});
   const [expenses, setExpenses] = useState<Record<string, FundExpense[]>>({});
   const [events, setEvents] = useState<FamilyEvent[]>([]);
-  const [registrations, setRegistrations] = useState<Record<string, Registration[]>>({});
-  const [mine, setMine] = useState<Record<string, Registration | null>>({});
+  const [registrations, setRegistrations] = useState<Record<string, EventRegistration[]>>({});
+  const [mine, setMine] = useState<Record<string, EventRegistration | null>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -274,7 +217,7 @@ function ActivitiesContent() {
             [
               e.id,
               family?.role === 'owner' || family?.role === 'editor'
-                ? await api<Registration[]>(`${root(familyId)}/events/${e.id}/registrations`)
+                ? await api<EventRegistration[]>(`${root(familyId)}/events/${e.id}/registrations`)
                 : [],
             ] as const,
         ),
@@ -286,7 +229,7 @@ function ActivitiesContent() {
           try {
             return [
               e.id,
-              await api<Registration>(`${root(familyId)}/events/${e.id}/registrations/me`),
+              await api<EventRegistration>(`${root(familyId)}/events/${e.id}/registrations/me`),
             ] as const;
           } catch {
             return [e.id, null] as const;

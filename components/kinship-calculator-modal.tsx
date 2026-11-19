@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { calculateMongolianKinship, KinshipEdge, KinshipMarriage, KinshipPerson } from '../lib/kinship';
+import { useFocusTrap } from '../lib/use-focus-trap';
 
 export interface KinshipCalculatorModalProps {
   isOpen: boolean;
@@ -36,6 +37,9 @@ export function KinshipCalculatorModal({
   const [personBId, setPersonBId] = useState<string>(people[1]?.id ?? people[0]?.id ?? '');
   const [searchA, setSearchA] = useState('');
   const [searchB, setSearchB] = useState('');
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(isOpen, dialogRef, { onEscape: onClose });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -48,16 +52,7 @@ export function KinshipCalculatorModal({
       const other = people.find((p) => p.id !== nextA);
       return other?.id ?? nextA;
     });
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, initialPersonAId, people, onClose]);
+  }, [isOpen, initialPersonAId, people]);
 
   const handleSwap = () => {
     setPersonAId(personBId);
@@ -116,6 +111,8 @@ export function KinshipCalculatorModal({
       }}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         style={{
           background: 'var(--ui-surface)',
           color: 'var(--ui-text)',

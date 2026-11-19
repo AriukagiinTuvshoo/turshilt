@@ -287,12 +287,13 @@ def add_parent_child(
     _assert_person_visible(db, _person_in_family(db, family_id, body.child_id), user)
     db.execute(select(Family.id).where(Family.id == family_id).with_for_update())
     family_person_ids = select(FamilyPerson.person_id).where(FamilyPerson.family_id == family_id)
-    edges = db.execute(
+    edge_rows = db.execute(
         select(ParentChildRelationship.parent_id, ParentChildRelationship.child_id).where(
             ParentChildRelationship.parent_id.in_(family_person_ids),
             ParentChildRelationship.child_id.in_(family_person_ids),
         )
     ).all()
+    edges = [(parent_id, child_id) for parent_id, child_id in edge_rows]
     try:
         assert_parent_child_is_acyclic(edges, body.parent_id, body.child_id)
     except RelationshipError as error:

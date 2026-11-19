@@ -8,27 +8,6 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';
-    const configuredApi = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? '';
-    let apiOrigin = '';
-    try {
-      if (configuredApi.startsWith('http://') || configuredApi.startsWith('https://')) {
-        apiOrigin = new URL(configuredApi).origin;
-      }
-    } catch {
-      apiOrigin = '';
-    }
-    const cspDirectives = [
-      "default-src 'self'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "frame-ancestors 'self'",
-      "object-src 'none'",
-      `script-src 'self' 'unsafe-inline'${isProd ? '' : " 'unsafe-eval'"}`,
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' data: https://fonts.gstatic.com",
-      `img-src 'self' data: blob: https: http://localhost:* http://127.0.0.1:*${apiOrigin ? ` ${apiOrigin}` : ''}`,
-      `connect-src 'self' https: http://localhost:* http://127.0.0.1:*${isProd ? '' : ' ws: wss:'}${apiOrigin ? ` ${apiOrigin}` : ''}`,
-    ];
     return [
       {
         source: '/:path*',
@@ -45,7 +24,6 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()',
           },
-          { key: 'Content-Security-Policy', value: cspDirectives.join('; ') },
         ],
       },
     ];

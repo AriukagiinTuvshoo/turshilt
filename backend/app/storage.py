@@ -137,13 +137,16 @@ def get_storage() -> ObjectStorage:
     settings = get_settings()
     if settings.storage_provider.lower() == "local":
         return LocalObjectStorage(settings.storage_local_path)
-    if not all((settings.storage_endpoint, settings.storage_bucket,
-                settings.storage_access_key, settings.storage_secret_key)):
+    endpoint = settings.storage_endpoint
+    bucket = settings.storage_bucket
+    access_key = settings.storage_access_key
+    secret_key = settings.storage_secret_key
+    if not endpoint or not bucket or not access_key or not secret_key:
         raise RuntimeError("S3 storage configuration is incomplete")
     return S3ObjectStorage(
-        settings.storage_endpoint,
-        settings.storage_bucket,
+        endpoint,
+        bucket,
         settings.storage_region,
-        settings.storage_access_key,
-        settings.storage_secret_key,
+        access_key,
+        secret_key,
     )

@@ -125,7 +125,9 @@ class Settings(BaseSettings):
             if not self.google_oidc_issuer.rstrip("/") == "https://accounts.google.com":
                 raise ValueError("Google OIDC issuer must be https://accounts.google.com.")
             if self.app_env.lower() == "production":
-                if not self.google_oidc_redirect_uri.startswith("https://"):
+                if not self.google_oidc_redirect_uri or not self.google_oidc_redirect_uri.startswith(
+                    "https://"
+                ):
                     raise ValueError("Production Google OIDC redirect URI must use HTTPS.")
                 if not self.google_oidc_state_secret or len(self.google_oidc_state_secret) < 32:
                     raise ValueError(
@@ -149,7 +151,7 @@ class Settings(BaseSettings):
                 self.storage_secret_key,
             )):
                 raise ValueError("Production requires complete S3-compatible storage settings.")
-            if not self.storage_endpoint.startswith("https://"):
+            if not self.storage_endpoint or not self.storage_endpoint.startswith("https://"):
                 raise ValueError("Production STORAGE_ENDPOINT must use HTTPS.")
         return self
 

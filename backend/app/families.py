@@ -1051,6 +1051,8 @@ def create_invitation(
     _audit(db, user, family_id, "invitation.created", "invitation", invitation.id)
     db.commit()
     family = db.get(Family, family_id)
+    if family is None:
+        raise HTTPException(status_code=404, detail="Гэр бүлийн орчин олдсонгүй.")
     settings = get_settings()
     link = f"{settings.email_public_base_url.rstrip('/')}/invite#token={raw_token}"
     try:

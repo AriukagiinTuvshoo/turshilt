@@ -524,3 +524,71 @@ def test_minor_photo_requires_manage_media_and_revoked_view_scope_denies_read(cl
         "email": "guardian@example.com", "password": "strong-passphrase-123",
     })
     assert client.get(content_url).status_code == 404
+
+
+def test_memory_detail_with_tagged_photo_and_minor_avatar_guardian_scope(client, database):
+    from test_guardianship import grant, setup_family
+
+    storage = MemoryStorage()
+    from app.main import app
+
+    app.dependency_overrides[get_storage] = lambda: storage
+    _, family, child, guardian = setup_family(client, database)
+    family_id = family["id"]
+
+    # Without guardianship grant, uploading a minor's avatar returns 403 cleanly
+    denied_avatar = client.post(
+        f"/api/v1/families/{family_id}/persons/{child['id']}/avatar",
+        content=png_bytes(),
+        headers={"Content-Type": "image/png", "X-File-Name": "child.png"},
+    )
+    assert denied_avatar.status_code == 403
+
+    # Grant guardian scopes including edit_profile, view_profile, manage_memories, manage_media
+    granted = grant(
+        client,
+        family_id,
+        child["id"],
+        guardian["id"],
+        ["view_profile", "edit_profile", "manage_memories", "manage_media"],
+    )
+    assert granted.status_code == 201
+
+    client.post("/api/v1/auth/logout")
+    client.post(
+        "/api/v1/auth/login",
+        json={"email": "guardian@example.com", "password": "strong-passphrase-123"},
+    )
+
+    # Guardian can upload & fetch the minor's avatar cleanly (fixed _require_minor_scope arg order)
+    avatar_put = client.post(
+        f"/api/v1/families/{family_id}/persons/{child['id']}/avatar",
+        content=png_bytes(),
+        headers={"Content-Type": "image/png", "X-File-Name": "child.png"},
+    )
+    assert avatar_put.status_code == 200, avatar_put.text
+    avatar_get = client.get(f"/api/v1/families/{family_id}/persons/{child['id']}/avatar")
+    assert avatar_get.status_code == 200
+    assert avatar_get.headers["content-type"] == "image/webp"
+
+    # Memory detail endpoint with tagged photo (fixed _photo_payload 3rd arg TypeError)
+    memory = client.post(
+        f"/api/v1/families/{family_id}/memories",
+        json={"title": "Баярын зураг", "visibility": "family", "person_ids": [child["id"]]},
+    ).json()
+    photo = client.post(
+        f"/api/v1/families/{family_id}/memories/{memory['id']}/photos",
+        content=png_bytes(),
+        headers={"Content-Type": "image/png", "X-File-Name": "party.png"},
+    ).json()
+    tagged = client.put(
+        f"/api/v1/families/{family_id}/photos/{photo['id']}/tags",
+        json={"person_ids": [child["id"]]},
+    )
+    assert tagged.status_code == 200
+
+    detail = client.get(f"/api/v1/families/{family_id}/memories/{memory['id']}")
+    assert detail.status_code == 200, detail.text
+    detail_photos = detail.json()["photos"]
+    assert len(detail_photos) == 1
+    assert detail_photos[0]["tagged_people"][0]["id"] == child["id"]

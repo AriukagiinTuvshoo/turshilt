@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Printer, Copy, Check, X, Sparkles, Sliders, Shield, FileSpreadsheet } from 'lucide-react';
 import { Family, TreeData, TreePerson, personName } from '../lib/api';
 import { AdvancedTreeLayout } from '../lib/tree-layout';
 import { exportToGedcom } from '../lib/gedcom';
+import { useFocusTrap } from '../lib/use-focus-trap';
 
 export interface TreeExportModalProps {
   isOpen: boolean;
@@ -57,6 +58,9 @@ export function TreeExportModal({
   const [includeTamga, setIncludeTamga] = useState(true);
   const [includeCalligraphy, setIncludeCalligraphy] = useState(true);
   const [copied, setCopied] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(isOpen, dialogRef, { onEscape: onClose });
 
   // Generate self-contained, publication-ready vector SVG string
   const svgString = useMemo(() => {
@@ -364,8 +368,21 @@ export function TreeExportModal({
   };
 
   return (
-    <div className="tree-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
-      <div className="tree-export-modal" style={{ width: 'min(980px, 95vw)', maxHeight: '92vh' }}>
+    <div
+      className="tree-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="export-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="tree-export-modal"
+        style={{ width: 'min(980px, 95vw)', maxHeight: '92vh' }}
+      >
         <header className="tree-export-header">
           <div className="tree-export-header-title">
             <span className="tree-export-badge">

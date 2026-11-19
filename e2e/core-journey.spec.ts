@@ -27,9 +27,21 @@ test.describe('Guulingiinhan Core E2E User Journey', () => {
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    await page.goto('/');
+    const response = await page.goto('/');
+    expect(response).not.toBeNull();
+    const csp = response!.headers()['content-security-policy'] ?? '';
+    expect(csp).toContain("'nonce-");
+    const scriptSrcDirective = csp.match(/script-src[^;]*/)?.[0] ?? '';
+    expect(scriptSrcDirective).not.toContain("'unsafe-inline'");
+
     await expect(page).toHaveTitle(/Гуулингийнхан/i);
     await expect(page.locator('body')).toContainText(/Гуулингийнхан/i);
+
+    const manifestResp = await page.request.get('/manifest.webmanifest');
+    expect(manifestResp.status()).toBe(200);
+    const manifestJson = await manifestResp.json();
+    expect(manifestJson.short_name).toBe('Гуулингийнхан');
+
     expect(pageErrors).toEqual([]);
   });
 
@@ -107,11 +119,16 @@ test.describe('Guulingiinhan Core E2E User Journey', () => {
     await expect(page.locator('body')).toContainText('Дорж');
     await expect(page.locator('body')).toContainText('Тэмүүлэн');
 
-    // 5. Open unified Kinship Calculator modal, verify Mongolian kinship term, swap A <-> B, and close with Escape
+    // 5. Open unified Kinship Calculator modal, verify WCAG Tab focus-trap, Mongolian kinship term, swap A <-> B, and close with Escape
     await page.getByRole('button', { name: /Хамаарал тооцоолох/i }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('Монгол Ургийн Хамаарлын Тооцоолуур');
+
+    // Verify Tab keeps focus trapped inside dialog
+    await page.keyboard.press('Tab');
+    const focusedInsideDialog = await dialog.evaluate((el) => el.contains(document.activeElement));
+    expect(focusedInsideDialog).toBe(true);
 
     // Initial pair (Father <-> Son) must show either "Хүү" or "Аав"
     await expect(dialog).toContainText(/(Хүү|Аав)/);

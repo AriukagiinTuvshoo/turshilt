@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   X,
   Sparkles,
@@ -12,6 +12,7 @@ import {
   Search,
 } from 'lucide-react';
 import { ApiError, api, Person, Marriage, SmartConnectOut } from '../lib/api';
+import { useFocusTrap } from '../lib/use-focus-trap';
 
 export type RelativeRole =
   | 'father'
@@ -94,6 +95,14 @@ export function PedigreeWizardModal({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(isOpen, dialogRef, {
+    onEscape: () => {
+      if (!loading) onClose();
+    },
+    disabled: loading,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -356,6 +365,8 @@ export function PedigreeWizardModal({
       aria-labelledby="pedigree-wizard-title"
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         style={{
           width: 'min(680px, 100%)',
           maxHeight: '92vh',

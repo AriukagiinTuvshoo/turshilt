@@ -35,6 +35,7 @@ import { TreeDrawer } from './tree-drawer';
 import { TreeExportModal } from '../../components/tree-export-modal';
 import { PedigreeWizardModal, RelativeRole } from '../../components/pedigree-wizard-modal';
 import { KinshipCalculatorModal } from '../../components/kinship-calculator-modal';
+import { useFocusTrap } from '../../lib/use-focus-trap';
 import { GitCompare } from 'lucide-react';
 
 const Tree3DScene = dynamic(() => import('../../components/tree-3d-scene'), {
@@ -138,6 +139,12 @@ function TreePageContent() {
   const [divorceMarriageId, setDivorceMarriageId] = useState<string | null>(null);
   const [divorceEndDate, setDivorceEndDate] = useState('');
   const [divorceBusy, setDivorceBusy] = useState(false);
+  const divorceModalRef = useRef<HTMLElement>(null);
+
+  useFocusTrap(Boolean(divorceMarriageId), divorceModalRef, {
+    onEscape: () => setDivorceMarriageId(null),
+    disabled: divorceBusy,
+  });
 
   // Bloodline Highlight & Interaction States
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
@@ -1109,7 +1116,7 @@ function TreePageContent() {
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onWheel={handleWheel}
-                style={{ cursor: isDragging.current ? 'grabbing' : 'grab', userSelect: 'none' }}
+                style={{ cursor: isDraggingActive ? 'grabbing' : 'grab', userSelect: 'none' }}
                 aria-label="Удмын модны зөөврийн зураглал. Хулганаар чирч шилжүүлэх болон томруулж жижигрүүлж харна."
               >
                 {isFullscreen && (
@@ -1529,7 +1536,12 @@ function TreePageContent() {
             if (e.target === e.currentTarget && !divorceBusy) setDivorceMarriageId(null);
           }}
         >
-          <section className="tree-modal" style={{ maxWidth: '420px', width: '100%' }}>
+          <section
+            ref={divorceModalRef}
+            tabIndex={-1}
+            className="tree-modal"
+            style={{ maxWidth: '420px', width: '100%' }}
+          >
             <div className="tree-modal-head">
               <h2 id="divorce-modal-title">Гэрлэлт цуцалсан төлөв оруулах</h2>
               <button

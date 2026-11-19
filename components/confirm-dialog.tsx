@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { useFocusTrap } from '../lib/use-focus-trap';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -29,6 +30,12 @@ export function ConfirmDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
 
+  useFocusTrap(isOpen, dialogRef, {
+    onEscape: onCancel,
+    initialFocusRef: confirmBtnRef,
+    disabled: busy,
+  });
+
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -41,10 +48,6 @@ export function ConfirmDialog({
           dialog.setAttribute('open', 'true');
         }
       }
-      const timer = setTimeout(() => {
-        confirmBtnRef.current?.focus();
-      }, 30);
-      return () => clearTimeout(timer);
     } else if (dialog.open) {
       try {
         dialog.close();

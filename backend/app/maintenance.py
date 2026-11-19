@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -114,7 +116,7 @@ def _purge_orphan_persons(db: Session, orphan_ids: list[UUID]) -> int:
     ):
         db.execute(delete(model).where(model.person_id.in_(orphan_ids)))
 
-    result = db.execute(delete(Person).where(Person.id.in_(orphan_ids)))
+    result = cast(CursorResult[Any], db.execute(delete(Person).where(Person.id.in_(orphan_ids))))
     return int(result.rowcount or 0)
 
 
@@ -169,7 +171,7 @@ def _prune_model_before(
             db.scalar(select(func.count()).select_from(model).where(model.expires_at < cutoff))
             or 0
         )
-    result = db.execute(delete(model).where(model.expires_at < cutoff))
+    result = cast(CursorResult[Any], db.execute(delete(model).where(model.expires_at < cutoff)))
     return int(result.rowcount or 0)
 
 
@@ -194,12 +196,11 @@ def prune_expired_auth_artifacts(
             or 0
         )
     else:
-        throttles_pruned = int(
-            db.execute(
-                delete(LoginThrottle).where(LoginThrottle.window_started < throttle_cutoff)
-            ).rowcount
-            or 0
+        throttle_result = cast(
+            CursorResult[Any],
+            db.execute(delete(LoginThrottle).where(LoginThrottle.window_started < throttle_cutoff)),
         )
+        throttles_pruned = int(throttle_result.rowcount or 0)
 
     return {
         "expired_sessions_pruned": _prune_model_before(db, UserSession, ts, dry_run=dry_run),
