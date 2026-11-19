@@ -24,3 +24,5 @@ backend/*.egg-info/
 tsconfig.tsbuildinfo
 backend/media/
 backend/storage/
+playwright-report/
+test-results/

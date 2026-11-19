@@ -8,6 +8,7 @@
     "build": "node scripts/verify-production-env.mjs && next build",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/frontend.test.ts",
+    "test:e2e": "playwright test",
     "start": "next start --hostname 0.0.0.0"
   },
   "dependencies": {
@@ -17,6 +18,7 @@
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
