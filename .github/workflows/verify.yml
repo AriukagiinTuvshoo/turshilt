@@ -90,9 +90,29 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     needs: [frontend, backend]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: guulingiinhan_e2e
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d guulingiinhan_e2e"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       APP_ENV: test
-      DATABASE_URL: sqlite:///./e2e_ci.db
+      DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/guulingiinhan_e2e
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: test_user
+      PGPASSWORD: test_password
+      PGDATABASE: guulingiinhan_e2e
+      BACKUP_DIR: /tmp/guulin_ci_backups
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
       E2E_BASE_URL: http://localhost:3000
     steps:
@@ -113,14 +133,21 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-      - name: Install backend dependencies & migrate DB
+      - name: Install backend dependencies & migrate PostgreSQL
         working-directory: backend
         run: |
           uv sync --locked --dev
           uv run alembic upgrade head
+      - name: Run PostgreSQL pg_dump & isolated restore drill
+        run: |
+          if ! command -v pg_dump >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+          fi
+          sh scripts/pg-backup.sh
+          sh scripts/pg-restore-drill.sh
       - name: Build Next.js for E2E
         run: npm run build
-      - name: Start servers and run Playwright E2E tests
+      - name: Start servers, check /metrics, and run Playwright E2E tests
         run: |
           (cd backend && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000) &
           BACKEND_PID=$!
@@ -133,6 +160,7 @@ jobs:
             fi
             sleep 1
           done
+          curl -sf http://127.0.0.1:8000/metrics | grep -q guulin_http_requests_total
           npm run test:e2e
       - name: Upload Playwright report on failure
         if: failure()

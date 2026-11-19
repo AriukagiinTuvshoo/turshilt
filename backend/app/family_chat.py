@@ -48,6 +48,12 @@ _pg_listener_thread: threading.Thread | None = None
 _pg_listener_conn: Any = None
 
 
+def active_sse_subscriber_count() -> int:
+    """Return total active in-process SSE chat subscriber connections."""
+    with _subscribers_lock:
+        return sum(len(subs) for subs in _chat_subscribers.values())
+
+
 def _psycopg_conninfo(database_url: str) -> str | None:
     """Return a psycopg3-compatible PostgreSQL DSN or None for non-PostgreSQL URLs."""
     url = database_url.strip()

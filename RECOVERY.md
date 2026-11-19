@@ -163,3 +163,11 @@ The repository's `main` branch also has a later commit deleting `vercel.json`; P
 ## Completion gate
 
 P4.12 should not be called fully production-ready until the actual DB/storage providers and backup settings are verified, an isolated synthetic restore is demonstrated, consistency/integrity checks pass, authentication/privacy checks pass, and the complete CI workflow is green.
+
+## Automated PostgreSQL Dump & Isolated Restore Drill Scripts
+
+The repository now includes automated PostgreSQL archive and verification scripts for self-hosted `docker-compose.prod.yml` deployments and CI rehearsal:
+
+- [scripts/pg-backup.sh](scripts/pg-backup.sh): Creates timestamped custom-format `pg_dump` archives (`guulin_<UTC>.dump`), verifies archive readability with `pg_restore --list`, emits `.sha256` checksums, and prunes archives older than `BACKUP_RETENTION_DAYS` (default `14`).
+- [scripts/pg-restore-drill.sh](scripts/pg-restore-drill.sh): Verifies `.sha256`, restores into an isolated temporary database (`guulin_restore_drill_*`), confirms all critical schema tables (`alembic_version`, `users`, `families`, `persons`, `family_funds`, `fund_expenses`, `family_events`, `chat_messages`, etc.), and drops the temporary drill database automatically on exit.
+- `docker-compose.prod.yml` includes a `backup` service writing encrypted-host-volume archives to `postgres_backups:/backups`. Ensure off-site encrypted replication of `postgres_backups` plus object-storage versioning is enabled before going live.

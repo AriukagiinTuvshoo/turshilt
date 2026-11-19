@@ -1,26 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
 import { expect, test } from '@playwright/test';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
-
-function verifyE2EUserEmail(email: string) {
-  const backendDir = path.resolve(process.cwd(), 'backend');
-  const winPython = path.join(backendDir, '.venv', 'Scripts', 'python.exe');
-  const nixPython = path.join(backendDir, '.venv', 'bin', 'python');
-  const pythonBin = fs.existsSync(winPython)
-    ? winPython
-    : fs.existsSync(nixPython)
-      ? nixPython
-      : 'python3';
-
-  execFileSync(pythonBin, ['scripts/verify_e2e_user.py', email], {
-    cwd: backendDir,
-    stdio: 'pipe',
-    env: { ...process.env, PYTHONPATH: backendDir },
-  });
-}
+import { API_BASE, verifyE2EUserEmail } from './helpers';
 
 test.describe('Guulingiinhan Core E2E User Journey', () => {
   test('renders landing page without uncaught runtime errors', async ({ page }) => {

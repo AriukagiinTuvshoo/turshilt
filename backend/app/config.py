@@ -50,10 +50,15 @@ class Settings(BaseSettings):
     email_smtp_username: str | None = None
     email_smtp_password: str | None = None
     email_smtp_starttls: bool = True
+    metrics_enabled: bool = True
+    metrics_bearer_token: str | None = None
+    alert_webhook_url: str | None = None
+    alert_5xx_threshold: int = 5
+    alert_cooldown_seconds: int = 300
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    @field_validator("email_from", mode="before")
+    @field_validator("email_from", "metrics_bearer_token", "alert_webhook_url", mode="before")
     @classmethod
     def empty_str_to_none(cls, v):
         if isinstance(v, str) and not v.strip():
@@ -145,7 +150,13 @@ class Settings(BaseSettings):
             raise ValueError("PHOTO_UPLOAD_IP_PER_MINUTE must be between 1 and 300.")
         if not 1 <= self.photo_upload_family_per_minute <= 1000:
             raise ValueError("PHOTO_UPLOAD_FAMILY_PER_MINUTE must be between 1 and 1000.")
+        if not 1 <= self.alert_5xx_threshold <= 1000:
+            raise ValueError("ALERT_5XX_THRESHOLD must be between 1 and 1000.")
+        if not 10 <= self.alert_cooldown_seconds <= 86400:
+            raise ValueError("ALERT_COOLDOWN_SECONDS must be between 10 and 86400.")
         if self.app_env.lower() == "production":
+            if self.alert_webhook_url and not self.alert_webhook_url.startswith("https://"):
+                raise ValueError("Production ALERT_WEBHOOK_URL must use HTTPS.")
             if self.storage_provider.lower() != "s3" or not all((
                 self.storage_endpoint, self.storage_bucket, self.storage_access_key,
                 self.storage_secret_key,

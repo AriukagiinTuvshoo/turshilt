@@ -1,3 +1,4 @@
+import hmac
 import logging
 import time
 import uuid
@@ -6,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -17,9 +18,14 @@ from app.families import invitations_router, lineages_router
 from app.families import router as families_router
 from app.family_activities import public_funds_router
 from app.family_activities import router as family_activities_router
-from app.family_chat import start_chat_pg_listener, stop_chat_pg_listener
+from app.family_chat import (
+    active_sse_subscriber_count,
+    start_chat_pg_listener,
+    stop_chat_pg_listener,
+)
 from app.invitation_preview import router as invitation_preview_router
 from app.memory_photos import router as memory_photos_router
+from app.metrics import PROMETHEUS_CONTENT_TYPE, alert_dispatcher, metrics_registry
 from app.observability import configure_logging, error_classification, request_id_context
 
 settings = get_settings()
@@ -153,6 +159,20 @@ async def request_context(request: Request, call_next):
             "rate_limit_namespace": rate_limit_namespace,
         },
     )
+    if route != "/metrics":
+        metrics_registry.record_request(
+            method=request.method,
+            route=route,
+            status_code=response.status_code,
+            duration_seconds=duration_ms / 1000.0,
+            error_code=error_code,
+        )
+        if response.status_code >= 500:
+            alert_dispatcher.record_5xx(
+                route=route,
+                error_code=error_code,
+                request_id=request_id,
+            )
     request_id_context.reset(context_token)
     return response
 
@@ -204,3 +224,25 @@ def readiness(request: Request):
 def ready_alias(request: Request):
     """Readiness probe alias pointing to /health/ready."""
     return readiness(request)
+
+
+@app.get("/metrics", tags=["system"], include_in_schema=False)
+def prometheus_metrics(request: Request):
+    """Expose Prometheus 0.0.4 text metrics; gated by bearer token when configured or in prod."""
+    current_settings = get_settings()
+    if not current_settings.metrics_enabled:
+        raise HTTPException(status_code=404, detail="Metrics идэвхгүй байна.")
+    expected_token = current_settings.metrics_bearer_token
+    if current_settings.app_env.lower() == "production" and not expected_token:
+        raise HTTPException(status_code=404, detail="Metrics тохируулагдаагүй байна.")
+    if expected_token:
+        auth_header = request.headers.get("authorization", "")
+        supplied = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+        if not supplied or not hmac.compare_digest(supplied, expected_token):
+            raise HTTPException(status_code=401, detail="Metrics хандалтын токен буруу байна.")
+    body = metrics_registry.render(sse_connections=active_sse_subscriber_count())
+    return Response(
+        content=body,
+        media_type=PROMETHEUS_CONTENT_TYPE,
+        headers={"Cache-Control": "no-store"},
+    )
