@@ -125,5 +125,60 @@ test.describe('Guulingiinhan Core E2E User Journey', () => {
     // Escape closes the modal cleanly
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
+
+    // 6. Smart Kinship Wiring 2.0: Add Mother via smart-connect -> auto-marries Father
+    const motherResp = await page.request.post(`${API_BASE}/families/${familyId}/persons`, {
+      data: {
+        first_name: 'Оюун',
+        last_name: 'Сартуул',
+        gender: 'female',
+        birth_date: '1963-04-12',
+        is_alive: true,
+      },
+    });
+    expect(motherResp.status()).toBe(201);
+    const mother = await motherResp.json();
+
+    const smartResp = await page.request.post(
+      `${API_BASE}/families/${familyId}/relationships/smart-connect`,
+      {
+        data: {
+          anchor_person_id: son.id,
+          target_person_id: mother.id,
+          role: 'mother',
+          auto_marry_coparent: true,
+          apply_to_siblings: true,
+        },
+      },
+    );
+    expect(smartResp.status()).toBe(201);
+    const smartBody = await smartResp.json();
+    expect(smartBody.created_marriages).toBe(1);
+
+    // 7. Create a Memory, open /memories, tap ❤️ Heart like, and verify count increments
+    const memResp = await page.request.post(`${API_BASE}/families/${familyId}/memories`, {
+      data: {
+        title: 'Зуны ургийн наадмын дурсамж',
+        description: 'Гэр бүлээрээ цугларсан сайхан өдөр',
+        memory_date: '2025-07-11',
+        visibility: 'family',
+        person_ids: [father.id, son.id],
+      },
+    });
+    expect(memResp.status()).toBe(201);
+
+    await page.goto(`/memories?family=${encodeURIComponent(familyId)}`);
+    await expect(page.locator('body')).toContainText('Зуны ургийн наадмын дурсамж');
+
+    const likeButton = page.locator('button[title="Дурсамжид зүрх дарах"]').first();
+    await expect(likeButton).toBeVisible();
+    await likeButton.click();
+    await expect(page.locator('button[aria-pressed="true"]').first()).toContainText('1');
+
+    // 8. Visit /activities (Family Fund & Gatherings RSVP) and verify both tabs render cleanly
+    await page.goto(`/activities?family=${encodeURIComponent(familyId)}`);
+    await expect(page.locator('body')).toContainText('Ургийн Сан & Уулзалт, Цугларалт');
+    await page.getByRole('button', { name: /Уулзалт & Арга хэмжээ/i }).click();
+    await expect(page.locator('body')).toContainText('Ургийн уулзалт, арга хэмжээ зарлах');
   });
 });
