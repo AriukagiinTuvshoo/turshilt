@@ -446,5 +446,56 @@ def test_profile_photo_url_validation(client, database):
     assert patch_bad.status_code == 422
 
 
+def test_person_avatar_upload_and_serve(client, database):
+    import io
+
+    from PIL import Image
+
+    assert register_verified(client, "avatar-owner@example.com").status_code == 201
+    family = client.post("/api/v1/families", json={"name": "Зураг upload тест"}).json()
+    fid = family["id"]
+    person = client.post(
+        f"/api/v1/families/{fid}/persons",
+        json={"first_name": "Энх", "last_name": "Боржигон", "gender": "male"},
+    ).json()
+    pid = person["id"]
+
+    # Invalid file bytes -> 415
+    bad_resp = client.post(
+        f"/api/v1/families/{fid}/persons/{pid}/avatar",
+        content=b"not a real image",
+        headers={"Content-Type": "image/png"},
+    )
+    assert bad_resp.status_code == 415
+
+    # Empty body -> 422
+    empty_resp = client.post(
+        f"/api/v1/families/{fid}/persons/{pid}/avatar",
+        content=b"",
+        headers={"Content-Type": "image/png"},
+    )
+    assert empty_resp.status_code == 422
+
+    # Valid PNG -> 200, encoded as 512x512 WebP and served cleanly
+    buf = io.BytesIO()
+    Image.new("RGB", (800, 600), color=(30, 90, 70)).save(buf, format="PNG")
+    ok_resp = client.post(
+        f"/api/v1/families/{fid}/persons/{pid}/avatar",
+        content=buf.getvalue(),
+        headers={"Content-Type": "image/png"},
+    )
+    assert ok_resp.status_code == 200
+    avatar_url = ok_resp.json()["profile_photo_url"]
+    assert avatar_url.startswith(f"/families/{fid}/persons/{pid}/avatar?v=")
+
+    get_resp = client.get(f"/api/v1{avatar_url}")
+    assert get_resp.status_code == 200
+    assert get_resp.headers["content-type"] == "image/webp"
+    with Image.open(io.BytesIO(get_resp.content)) as saved:
+        assert saved.format == "WEBP"
+        assert saved.size == (512, 512)
+
+
+
 
 

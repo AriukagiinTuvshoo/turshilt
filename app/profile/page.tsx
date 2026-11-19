@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
+  API_BASE,
   ApiError,
   api,
   ArchiveListPage,
@@ -109,6 +110,8 @@ function ProfilePageContent() {
   const [oralAutoBio, setOralAutoBio] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [extractedResult, setExtractedResult] = useState<OralHistoryExtractOut | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   async function load(fid: string, pid: string, requestId?: number) {
     profileAbortRef.current?.abort();
@@ -497,6 +500,35 @@ function ProfilePageContent() {
     }
   }
 
+  async function handleUploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !family || !id || !canEdit || avatarUploading) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Зургийн хэмжээ 10MB-аас бага байх ёстой.');
+      return;
+    }
+    setAvatarUploading(true);
+    setError('');
+    setNotice('');
+    try {
+      const res = await api<{ profile_photo_url: string }>(
+        `/families/${family}/persons/${id}/avatar`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          body: file,
+        },
+      );
+      setPerson((prev) => (prev ? { ...prev, profile_photo_url: res.profile_photo_url } : prev));
+      setNotice('Нүүр зураг амжилттай шинэчлэгдлээ.');
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : 'Зураг байршуулж чадсангүй.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
   function handleDeleteEvent(eventId: string) {
     if (!canDelete) return;
     setConfirmState({
@@ -573,7 +605,11 @@ function ProfilePageContent() {
           {person.profile_photo_url ? (
             <img
               className="personavatar profile-photo"
-              src={person.profile_photo_url}
+              src={
+                person.profile_photo_url.startsWith('/families/')
+                  ? `${API_BASE}${person.profile_photo_url}`
+                  : person.profile_photo_url
+              }
               alt={`${personName(person)}-ийн хөрөг`}
             />
           ) : (
@@ -640,13 +676,31 @@ function ProfilePageContent() {
               </Link>
 
               {canEdit ? (
-                <button
-                  type="button"
-                  className="button"
-                  onClick={() => setEditing((value) => !value)}
-                >
-                  {editing ? 'Засахыг хаах' : '✏️ Профайл засах'}
-                </button>
+                <>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => void handleUploadAvatar(e)}
+                    style={{ display: 'none' }}
+                    aria-label="Нүүр зураг сонгох"
+                  />
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarUploading || mutationBusy}
+                  >
+                    {avatarUploading ? 'Байршуулж байна…' : '📷 Зураг солих'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => setEditing((value) => !value)}
+                  >
+                    {editing ? 'Засахыг хаах' : '✏️ Профайл засах'}
+                  </button>
+                </>
               ) : (
                 <span className="profile-locked-notice">
                   🔒 Зөвхөн админ эсвэл үүсгэсэн хэрэглэгч засах боломжтой

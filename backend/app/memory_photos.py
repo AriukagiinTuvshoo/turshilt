@@ -895,3 +895,133 @@ def delete_photo(
     db.delete(photo)
     db.commit()
     return Response(status_code=204)
+
+
+def _encode_square_avatar(data: bytes) -> bytes:
+    """Validate uploaded image bytes, strip EXIF, and encode a 512x512 WebP avatar."""
+    if not data:
+        raise HTTPException(status_code=422, detail="Зургийн файл хоосон байна.")
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+            with Image.open(io.BytesIO(data)) as img:
+                fmt = (img.format or "").upper()
+                if fmt not in SUPPORTED_FORMATS:
+                    raise HTTPException(
+                        status_code=415,
+                        detail="Зөвхөн JPEG, PNG эсвэл WEBP зураг оруулна уу.",
+                    )
+                transposed = ImageOps.exif_transpose(img)
+                rgb = transposed.convert("RGB")
+                fitted = ImageOps.fit(rgb, (512, 512), method=Image.Resampling.LANCZOS)
+                out = io.BytesIO()
+                fitted.save(out, format="WEBP", quality=85, method=4)
+                return out.getvalue()
+    except HTTPException:
+        raise
+    except (
+        UnidentifiedImageError,
+        OSError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+    ) as error:
+        raise HTTPException(
+            status_code=415, detail="Зургийн файл гэмтсэн эсвэл дэмжигдэхгүй байна."
+        ) from error
+
+
+@router.post("/{family_id}/persons/{person_id}/avatar")
+async def upload_person_avatar(
+    family_id: UUID,
+    person_id: UUID,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    storage: ObjectStorage = Depends(get_storage),
+):
+    member, _ = _member(db, family_id, user)
+    person = _person_in_family(db, family_id, person_id)
+    _assert_person_visible(db, person, user)
+
+    linked_to_user = db.scalar(
+        select(UserPersonLink.id).where(
+            UserPersonLink.user_id == user.id, UserPersonLink.person_id == person.id
+        )
+    )
+    is_minor_record = is_minor(person.birth_date) is True
+    baseline_edit = (
+        member.role in {"owner", "editor"}
+        or linked_to_user is not None
+        or person.created_by == user.id
+    )
+    if is_minor_record:
+        _require_minor_scope(db, user, family_id, person, "edit_profile")
+    elif not baseline_edit:
+        raise HTTPException(status_code=403, detail="Энэ хүний зургийг өөрчлөх эрхгүй.")
+
+    settings = get_settings()
+    remote_ip = _normalized_ip(request)
+    limits = (
+        ("photo_upload_user", str(user.id), settings.photo_upload_user_per_minute),
+        ("photo_upload_family", str(family_id), settings.photo_upload_family_per_minute),
+        ("photo_upload_ip", remote_ip, settings.photo_upload_ip_per_minute),
+    )
+    if any(not _consume_otp_rate(db, kind, value, limit) for kind, value, limit in limits):
+        raise HTTPException(
+            status_code=429,
+            detail="Зургийг хэт олон удаа оруулах гэж байна. Түр хүлээнэ үү.",
+        )
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > settings.photo_max_upload_bytes:
+                raise HTTPException(status_code=413, detail="Зургийн хэмжээ хэт том байна.")
+        except ValueError:
+            pass
+
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > settings.photo_max_upload_bytes:
+            raise HTTPException(status_code=413, detail="Зургийн хэмжээ хэт том байна.")
+        data.extend(chunk)
+
+    webp_bytes = _encode_square_avatar(bytes(data))
+    key = f"families/{family_id}/persons/{person_id}/avatar.webp"
+    storage.put(key, webp_bytes, "image/webp")
+
+    avatar_url = f"/families/{family_id}/persons/{person_id}/avatar?v={int(time.time())}"
+    person.profile_photo_url = avatar_url
+    _audit(db, user, family_id, "person.avatar_updated", "person", person.id)
+    db.commit()
+    return {"profile_photo_url": avatar_url}
+
+
+@router.get("/{family_id}/persons/{person_id}/avatar")
+def get_person_avatar(
+    family_id: UUID,
+    person_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    storage: ObjectStorage = Depends(get_storage),
+):
+    _member(db, family_id, user)
+    person = _person_in_family(db, family_id, person_id)
+    _assert_person_visible(db, person, user)
+    if is_minor(person.birth_date) is True:
+        _require_minor_scope(db, user, family_id, person, "view_profile")
+
+    key = f"families/{family_id}/persons/{person_id}/avatar.webp"
+    if not storage.exists(key):
+        raise HTTPException(status_code=404, detail="Нүүр зураг олдсонгүй.")
+    data = storage.get(key)
+    return Response(
+        content=data,
+        media_type="image/webp",
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
