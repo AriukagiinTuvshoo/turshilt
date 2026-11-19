@@ -5,6 +5,7 @@ import { calculateMongolianKinship, type KinshipPerson, type KinshipEdge, type K
 import { exportToGedcom, parseGedcom } from '../lib/gedcom.ts';
 import { findDuplicatePeople, getUpcomingFamilyReminders } from '../lib/duplicates.ts';
 import { buildAdvancedTreeLayout } from '../lib/tree-layout.ts';
+import { layoutTree3D } from '../lib/tree-3d-layout.ts';
 
 describe('Mongolian Traditional Kinship Calculator (lib/kinship.ts)', () => {
   const people: KinshipPerson[] = [
@@ -208,5 +209,52 @@ describe('Advanced Tree Layout Engine (lib/tree-layout.ts)', () => {
     assert.ok(p1.y < c1.y, 'Parent must render strictly above child');
     assert.equal(c1.y, c2.y);
     assert.notEqual(c1.x, c2.x, 'Siblings must not overlap horizontally');
+  });
+});
+
+describe('3D Tree Spatial Layout (lib/tree-3d-layout.ts)', () => {
+  it('returns empty position and generation maps for an empty tree', () => {
+    const layout = layoutTree3D({
+      persons: [],
+      root_person_id: null,
+      parent_child_relationships: [],
+      marriages: [],
+      meta: { depth: 3, node_count: 0, node_limit: 500, truncated: false },
+    });
+    assert.equal(layout.positions.size, 0);
+    assert.equal(layout.generations.size, 0);
+  });
+
+  it('positions parents higher on Y than children and separates branches along Z', () => {
+    const layout = layoutTree3D({
+      persons: [
+        { id: 'p1', first_name: 'Дорж', last_name: 'Боржигон', middle_name: null, gender: 'male', birth_date: '1960-01-01', is_alive: true, death_date: null, branch_id: 'b1' },
+        { id: 'p2', first_name: 'Дулам', last_name: 'Хөх', middle_name: null, gender: 'female', birth_date: '1962-01-01', is_alive: true, death_date: null, branch_id: 'b1' },
+        { id: 'c1', first_name: 'Тэмүүлэн', last_name: 'Дорж', middle_name: null, gender: 'male', birth_date: '1990-01-01', is_alive: true, death_date: null, branch_id: 'b1' },
+        { id: 'c2', first_name: 'Номин', last_name: 'Дорж', middle_name: null, gender: 'female', birth_date: '1993-01-01', is_alive: true, death_date: null, branch_id: 'b2' },
+      ],
+      root_person_id: 'p1',
+      parent_child_relationships: [
+        { id: 'r1', parent_id: 'p1', child_id: 'c1', relationship_type: 'biological' },
+        { id: 'r2', parent_id: 'p2', child_id: 'c1', relationship_type: 'biological' },
+        { id: 'r3', parent_id: 'p1', child_id: 'c2', relationship_type: 'biological' },
+      ],
+      marriages: [
+        { id: 'm1', person_1_id: 'p1', person_2_id: 'p2', status: 'married', start_date: '1988-06-01', end_date: null },
+      ],
+      meta: { depth: 3, node_count: 4, node_limit: 500, truncated: false },
+    });
+
+    const p1 = layout.positions.get('p1')!;
+    const p2 = layout.positions.get('p2')!;
+    const c1 = layout.positions.get('c1')!;
+    const c2 = layout.positions.get('c2')!;
+
+    assert.ok(p1.y > c1.y, 'Parent 3D Y coordinate must sit above child Y coordinate');
+    assert.equal(p1.y, p2.y, 'Spouses should share generation elevation');
+    assert.notEqual(c1.z, c2.z, 'Distinct branches should separate along the Z-axis');
+    assert.equal(layout.generations.get('p1'), 0);
+    assert.equal(layout.generations.get('p2'), 0);
+    assert.equal(layout.generations.get('c1'), 1);
   });
 });

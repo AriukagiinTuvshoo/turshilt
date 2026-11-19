@@ -332,6 +332,7 @@ class TreePersonOut(BaseModel):
     lineage_name: str | None = None
     branch_id: UUID | None = None
     branch_name: str | None = None
+    profile_photo_url: str | None = None
 
 
 class KinshipOut(BaseModel):
@@ -2975,6 +2976,7 @@ def family_tree(
                 lineage_name=None if restricted or lineage is None else lineage.name,
                 branch_id=None if restricted or branch is None else branch.id,
                 branch_name=None if restricted or branch is None else branch.name,
+                profile_photo_url=None if restricted else person.profile_photo_url,
             )
         )
 

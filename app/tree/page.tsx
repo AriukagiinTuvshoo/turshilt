@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   FormEvent,
   Suspense,
@@ -12,6 +13,7 @@ import {
 } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
+  API_BASE,
   ApiError,
   api,
   Family,
@@ -34,6 +36,16 @@ import { TreeExportModal } from '../../components/tree-export-modal';
 import { PedigreeWizardModal, RelativeRole } from '../../components/pedigree-wizard-modal';
 import { KinshipCalculatorModal } from '../../components/kinship-calculator-modal';
 import { GitCompare } from 'lucide-react';
+
+const Tree3DScene = dynamic(() => import('../../components/tree-3d-scene'), {
+  ssr: false,
+  loading: () => (
+    <div className="tree-loading-scene" role="status" aria-live="polite">
+      <strong>3D удмын модыг бэлтгэж байна…</strong>
+      <small>Гурван хэмжээст орон зайг ачаалж байна.</small>
+    </div>
+  ),
+});
 
 type RelationKind = 'parent' | 'child' | 'spouse';
 export type BloodlineMode = 'none' | 'all' | 'paternal' | 'maternal' | 'descendants';
@@ -131,6 +143,8 @@ function TreePageContent() {
   const [divorceBusy, setDivorceBusy] = useState(false);
 
   // Bloodline Highlight & Interaction States
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [focus3DRequest, setFocus3DRequest] = useState(0);
   const [bloodlineMode, setBloodlineMode] = useState<BloodlineMode>('none');
   const [isDraggingActive, setIsDraggingActive] = useState(false);
 
@@ -395,6 +409,10 @@ function TreePageContent() {
   };
 
   const centerOnPerson = (personId: string) => {
+    if (viewMode === '3d') {
+      setFocus3DRequest((prev) => prev + 1);
+      return;
+    }
     const node = layout.nodeById.get(personId);
     if (node && scrollRef.current) {
       const container = scrollRef.current;
@@ -594,6 +612,10 @@ function TreePageContent() {
 
   function focusSelected() {
     if (!selectedId) return;
+    if (viewMode === '3d') {
+      setFocus3DRequest((prev) => prev + 1);
+      return;
+    }
     const element = document.getElementById('tree-person-' + selectedId);
     element?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   }
@@ -929,6 +951,23 @@ function TreePageContent() {
             </div>
 
             <div className="tree-controls">
+              <div className="tree-segmented" role="group" aria-label="Мод харах горим">
+                <button
+                  type="button"
+                  aria-pressed={viewMode === '2d'}
+                  onClick={() => setViewMode('2d')}
+                >
+                  2D Мод
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={viewMode === '3d'}
+                  onClick={() => setViewMode('3d')}
+                >
+                  3D Мод
+                </button>
+              </div>
+
               <label className="tree-bloodline-select" title="Сонгосон хүний удам угсаа, үр садыг онцлон тодруулах">
                 <span>✨ Удам</span>
                 <select
@@ -1101,7 +1140,20 @@ function TreePageContent() {
               </Link>
             </section>
           ) : (
-            <div className="tree-map-layout">
+            <div className={`tree-map-layout ${viewMode === '3d' ? 'tree-map-layout--3d' : ''}`}>
+              {viewMode === '3d' && tree ? (
+                <Tree3DScene
+                  data={tree}
+                  selectedPersonId={selectedId}
+                  canonicalRootId={tree.lineage_root_person_id ?? tree.root_person_id ?? null}
+                  focusRequest={focus3DRequest}
+                  onSelect={(pid) => selectPerson(pid)}
+                  onFallback={() => {
+                    setViewMode('2d');
+                    setNotice('Энэ төхөөрөмж 3D WebGL дэмжихгүй тул 2D горим руу шилжлээ.');
+                  }}
+                />
+              ) : (
               <div
                 ref={scrollRef}
                 className={'tree-map-scroll ' + (isFullscreen ? 'is-fullscreen' : '')}
@@ -1330,7 +1382,20 @@ function TreePageContent() {
                           >
                             <div className="tree-person-avatar-wrap">
                               <span className="tree-person-avatar" aria-hidden="true">
-                                {initials(person)}
+                                {person.profile_photo_url ? (
+                                  <img
+                                    src={
+                                      person.profile_photo_url.startsWith('/')
+                                        ? `${API_BASE}${person.profile_photo_url}`
+                                        : person.profile_photo_url
+                                    }
+                                    alt=""
+                                    loading="lazy"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+                                  />
+                                ) : (
+                                  initials(person)
+                                )}
                               </span>
                               {person.is_alive ? (
                                 <span className="tree-alive-beacon" title="Амьд сэрүүн" />
@@ -1397,6 +1462,7 @@ function TreePageContent() {
                   </div>
                 </div>
               </div>
+              )}
 
               <TreeDrawer
                 familyId={familyId}
